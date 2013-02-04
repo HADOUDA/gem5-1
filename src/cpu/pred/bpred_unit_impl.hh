@@ -118,15 +118,6 @@ BPredUnit::regStats()
         ;
 }
 
-void
-BPredUnit::drainSanityCheck() const
-{
-    // We shouldn't have any outstanding requests when we resume from
-    // a drained system.
-    for (int i = 0; i < numThreads; ++i)
-        assert(predHist[i].empty());
-}
-
 bool
 BPredUnit::predict(StaticInstPtr &inst, const InstSeqNum &seqNum,
                    TheISA::PCState &pc, ThreadID tid)
