@@ -624,6 +624,8 @@ DefaultFetch<Impl>::finishTranslation(Fault fault, RequestPtr mem_req)
                 tid);
         ++fetchTlbSquashes;
         delete mem_req;
+	if (mem_req != memReq[tid])
+	    memReq[tid] = NULL;
         return;
     }
 
