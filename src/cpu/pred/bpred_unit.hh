@@ -76,9 +76,6 @@ class BPredUnit : public SimObject
      */
     void regStats();
 
-    /** Perform sanity checks after a drain. */
-    void drainSanityCheck() const;
-
     /**
      * Predicts whether or not the instruction is a taken branch, and the
      * target of the branch if it is taken.

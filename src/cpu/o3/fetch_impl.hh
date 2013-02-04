@@ -436,8 +436,6 @@ DefaultFetch<Impl>::drainSanityCheck() const
         assert(!stalls[i].commit);
         assert(fetchStatus[i] == Idle || stalls[i].drain);
     }
-
-    branchPred->drainSanityCheck();
 }
 
 template <class Impl>
