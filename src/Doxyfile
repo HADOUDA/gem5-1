@@ -660,7 +660,7 @@ IMAGE_PATH             = doxygen/images
 # input file. Doxygen will then use the output that the filter program writes 
 # to standard output.
 
-INPUT_FILTER           = 
+INPUT_FILTER           = ./doxyfilter.sed
 
 # The FILTER_PATTERNS tag can be used to specify filters on a per file pattern
 # basis.
