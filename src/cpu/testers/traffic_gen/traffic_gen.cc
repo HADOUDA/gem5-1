@@ -427,13 +427,13 @@ TrafficGen::StateGraph::LinearGen::execute()
     DPRINTF(TrafficGen, "LinearGen::execute: %c to addr %x, size %d\n",
             isRead ? 'r' : 'w', nextAddr, blocksize);
 
-    send(nextAddr, blocksize, isRead ? MemCmd::ReadReq : MemCmd::WriteReq);
+    if (send(nextAddr, blocksize, isRead ? MemCmd::ReadReq : MemCmd::WriteReq)) {
+	// increment the address
+	nextAddr += blocksize;
 
-    // increment the address
-    nextAddr += blocksize;
-
-    // Add the amount of data manipulated to the total
-    dataManipulated += blocksize;
+	// Add the amount of data manipulated to the total
+	dataManipulated += blocksize;
+    }
 }
 
 Tick
@@ -495,10 +495,10 @@ TrafficGen::StateGraph::RandomGen::execute()
             isRead ? 'r' : 'w', addr, blocksize);
 
     // send a new request packet
-    send(addr, blocksize, isRead ? MemCmd::ReadReq : MemCmd::WriteReq);
-
-    // Add the amount of data manipulated to the total
-    dataManipulated += blocksize;
+    if (send(addr, blocksize, isRead ? MemCmd::ReadReq : MemCmd::WriteReq)) {
+	// Add the amount of data manipulated to the total
+	dataManipulated += blocksize;
+    }
 }
 
 Tick
