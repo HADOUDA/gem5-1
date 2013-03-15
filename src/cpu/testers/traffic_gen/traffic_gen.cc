@@ -56,6 +56,7 @@ TrafficGen::TrafficGen(const TrafficGenParams* p)
       system(p->system),
       masterID(system->getMasterId(name())),
       port(name() + ".port", *this),
+      pendingRequests(0), maxPendingRequests(p->maxPendingRequests),
       stateGraph(*this, port, p->config_file, masterID),
       updateStateGraphEvent(this)
 {
@@ -152,6 +153,38 @@ TrafficGen::unserialize(Checkpoint* cp, const string& section)
     stateGraph.nextTransitionTick = nextTransitionTick;
 }
 
+bool
+TrafficGen::send(Addr addr, unsigned size, const MemCmd& cmd, uint8_t *data)
+{
+    if (pendingRequests < maxPendingRequests) {
+	// Create new request
+	Request::Flags flags;
+	Request *req = new Request(addr, size, flags, masterID);
+
+	// Embed it in a packet
+	PacketPtr pkt = new Packet(req, cmd);
+	pkt->dataDynamicArray(data);
+
+	++pendingRequests;
+	port.schedTimingReq(pkt, curTick());
+	return true;
+    } else {
+	return false;
+    }
+}
+
+bool
+TrafficGen::recvTimingResp(PacketPtr pkt)
+{
+    assert(pendingRequests >= 1);
+    --pendingRequests;
+
+    delete pkt->req;
+    delete pkt;
+
+    return true;
+}
+
 void
 TrafficGen::updateStateGraph()
 {
@@ -210,11 +243,11 @@ TrafficGen::StateGraph::parseConfig(const string& file_name,
 
                     is >> traceFile >> addrOffset;
 
-                    states[id] = new TraceGen(port, master_id, duration,
+                    states[id] = new TraceGen(owner, duration,
                                               traceFile, addrOffset);
                     DPRINTF(TrafficGen, "State: %d TraceGen\n", id);
                 } else if (mode == "IDLE") {
-                    states[id] = new IdleGen(port, master_id, duration);
+                    states[id] = new IdleGen(owner, duration);
                     DPRINTF(TrafficGen, "State: %d IdleGen\n", id);
                 } else if (mode == "LINEAR" || mode == "RANDOM") {
                     uint32_t read_percent;
@@ -237,14 +270,14 @@ TrafficGen::StateGraph::parseConfig(const string& file_name,
                         panic("%s cannot have more than 100% reads", name());
 
                     if (mode == "LINEAR") {
-                        states[id] = new LinearGen(port, master_id,
+                        states[id] = new LinearGen(owner,
                                                    duration, start_addr,
                                                    end_addr, blocksize,
                                                    min_period, max_period,
                                                    read_percent, data_limit);
                         DPRINTF(TrafficGen, "State: %d LinearGen\n", id);
                     } else if (mode == "RANDOM") {
-                        states[id] = new RandomGen(port, master_id,
+                        states[id] = new RandomGen(owner,
                                                    duration, start_addr,
                                                    end_addr, blocksize,
                                                    min_period, max_period,
@@ -344,32 +377,25 @@ TrafficGen::StateGraph::enterState(uint32_t newState)
     states[currState]->enter();
 }
 
-TrafficGen::StateGraph::BaseGen::BaseGen(QueuedMasterPort& _port,
-                                         MasterID master_id,
-                                         Tick _duration)
-    : port(_port), masterID(master_id), duration(_duration)
+TrafficGen::StateGraph::BaseGen::BaseGen(TrafficGen& _owner, Tick _duration)
+    : owner(_owner), duration(_duration)
 {
 }
 
-void
+bool
 TrafficGen::StateGraph::BaseGen::send(Addr addr, unsigned size,
-                                      const MemCmd& cmd)
+				      const MemCmd& cmd)
 {
-    // Create new request
-    Request::Flags flags;
-    Request *req = new Request(addr, size, flags, masterID);
+    uint8_t* pkt_data = new uint8_t[size];
+    if (cmd.isWrite())
+        memset(pkt_data, 0xA, size);
 
-    // Embed it in a packet
-    PacketPtr pkt = new Packet(req, cmd);
-
-    uint8_t* pkt_data = new uint8_t[req->getSize()];
-    pkt->dataDynamicArray(pkt_data);
-
-    if (cmd.isWrite()) {
-        memset(pkt_data, 0xA, req->getSize());
+    if (!owner.send(addr, size, cmd, pkt_data)) {
+	delete[] pkt_data;
+	return false;
+    } else {
+	return true;
     }
-
-    port.schedTimingReq(pkt, curTick());
 }
 
 void
@@ -381,9 +407,10 @@ TrafficGen::StateGraph::LinearGen::enter()
 
     // this test only needs to happen once, but cannot be performed
     // before init() is called and the ports are connected
-    if (port.deviceBlockSize() && blocksize > port.deviceBlockSize())
+    if (owner.port.deviceBlockSize() &&
+	blocksize > owner.port.deviceBlockSize())
         fatal("TrafficGen %s block size (%d) is larger than port"
-              " block size (%d)\n", blocksize, port.deviceBlockSize());
+              " block size (%d)\n", blocksize, owner.port.deviceBlockSize());
 
 }
 
@@ -441,9 +468,11 @@ TrafficGen::StateGraph::RandomGen::enter()
 
     // this test only needs to happen once, but cannot be performed
     // before init() is called and the ports are connected
-    if (port.deviceBlockSize() && blocksize > port.deviceBlockSize())
+    if (owner.port.deviceBlockSize() &&
+	blocksize > owner.port.deviceBlockSize())
         fatal("TrafficGen %s block size (%d) is larger than port"
-              " block size (%d)\n", name(), blocksize, port.deviceBlockSize());
+              " block size (%d)\n", name(), blocksize,
+	      owner.port.deviceBlockSize());
 }
 
 void
@@ -606,13 +635,4 @@ TrafficGen::StateGraph::TraceGen::exit() {
     // Clear any flags and start over again from the beginning of the
     // file
     trace.reset();
-}
-
-bool
-TrafficGen::TrafficGenPort::recvTimingResp(PacketPtr pkt)
-{
-    delete pkt->req;
-    delete pkt;
-
-    return true;
 }

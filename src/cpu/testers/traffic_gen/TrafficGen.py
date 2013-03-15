@@ -71,3 +71,6 @@ class TrafficGen(MemObject):
 
     # System used to determine the mode of the memory system
     system = Param.System(Parent.any, "System this generator is part of")
+
+    maxPendingRequests = Param.Unsigned(16, "Maximum number of pending " \
+                                            "memory accesses")

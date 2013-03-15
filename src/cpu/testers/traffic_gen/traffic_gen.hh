@@ -164,22 +164,23 @@ class TrafficGen : public MemObject
         {
 
           protected:
-
-            /** Port used to send requests */
-            QueuedMasterPort& port;
-
-            /** The MasterID used for generating requests */
-            const MasterID masterID;
-
             /**
              * Create a new request and associated packet and schedule
              * it to be sent in the current tick.
              *
+	     * @note This method may return false to indicate that a packet
+	     * couldn't be delivered because the maximum number of outstanding
+	     * memory requests has been reached.
+	     *
              * @param addr Physical address to use
              * @param size Size of the request
              * @param cmd Memory command to send
+	     * @return True if the request was sent, false otherwise.
              */
-            void send(Addr addr, unsigned size, const MemCmd& cmd);
+            bool send(Addr addr, unsigned size, const MemCmd& cmd);
+
+	    /** Pointer to owner of generator */
+	    TrafficGen& owner;
 
           public:
 
@@ -189,12 +190,10 @@ class TrafficGen : public MemObject
             /**
              * Create a base generator.
              *
-             * @param _port port used to send requests
-             * @param master_id MasterID set on each request
+             * @param _owner object owning the generator instance
              * @param _duration duration of this state before transitioning
              */
-            BaseGen(QueuedMasterPort& _port, MasterID master_id,
-                    Tick _duration);
+            BaseGen(TrafficGen& _owner, Tick _duration);
 
             virtual ~BaseGen() { }
 
@@ -203,7 +202,7 @@ class TrafficGen : public MemObject
              *
              * @return the port name
              */
-            std::string name() const { return port.name(); }
+            std::string name() const { return owner.name(); }
 
             /**
              * Enter this generator state.
@@ -239,9 +238,8 @@ class TrafficGen : public MemObject
 
           public:
 
-            IdleGen(QueuedMasterPort& _port, MasterID master_id,
-                    Tick _duration)
-                : BaseGen(_port, master_id, _duration)
+            IdleGen(TrafficGen& _owner, Tick _duration)
+                : BaseGen(_owner, _duration)
             { }
 
             void enter() { }
@@ -268,8 +266,7 @@ class TrafficGen : public MemObject
              * min_period == max_period for a fixed inter-transaction
              * time.
              *
-             * @param _port port used to send requests
-             * @param master_id MasterID set on each request
+             * @param _owner object owning the generator instance
              * @param _duration duration of this state before transitioning
              * @param start_addr Start address
              * @param end_addr End address
@@ -279,11 +276,11 @@ class TrafficGen : public MemObject
              * @param read_percent Percent of transactions that are reads
              * @param data_limit Upper limit on how much data to read/write
              */
-            LinearGen(QueuedMasterPort& _port, MasterID master_id,
-                      Tick _duration, Addr start_addr, Addr end_addr,
+            LinearGen(TrafficGen& _owner, Tick _duration,
+                      Addr start_addr, Addr end_addr,
                       Addr _blocksize, Tick min_period, Tick max_period,
                       uint8_t read_percent, Addr data_limit)
-                : BaseGen(_port, master_id, _duration),
+                : BaseGen(_owner, _duration),
                   startAddr(start_addr), endAddr(end_addr),
                   blocksize(_blocksize), minPeriod(min_period),
                   maxPeriod(max_period), readPercent(read_percent),
@@ -345,8 +342,7 @@ class TrafficGen : public MemObject
              * min_period == max_period for a fixed inter-transaction
              * time.
              *
-             * @param _port port used to send requests
-             * @param master_id MasterID set on each request
+             * @param _owner object owning the generator instance
              * @param _duration duration of this state before transitioning
              * @param start_addr Start address
              * @param end_addr End address
@@ -356,11 +352,11 @@ class TrafficGen : public MemObject
              * @param read_percent Percent of transactions that are reads
              * @param data_limit Upper limit on how much data to read/write
              */
-            RandomGen(QueuedMasterPort& _port, MasterID master_id,
-                      Tick _duration, Addr start_addr, Addr end_addr,
+            RandomGen(TrafficGen& _owner, Tick _duration,
+		      Addr start_addr, Addr end_addr,
                       Addr _blocksize, Tick min_period, Tick max_period,
                       uint8_t read_percent, Addr data_limit)
-                : BaseGen(_port, master_id, _duration),
+                : BaseGen(_owner, _duration),
                   startAddr(start_addr), endAddr(end_addr),
                   blocksize(_blocksize), minPeriod(min_period),
                   maxPeriod(max_period), readPercent(read_percent),
@@ -492,16 +488,15 @@ class TrafficGen : public MemObject
            /**
              * Create a trace generator.
              *
-             * @param _port port used to send requests
-             * @param master_id MasterID set on each request
+             * @param _owner object owning the generator instance
              * @param _duration duration of this state before transitioning
              * @param trace_file File to read the transactions from
              * @param addr_offset Positive offset to add to trace address
              */
-            TraceGen(QueuedMasterPort& _port, MasterID master_id,
-                     Tick _duration, const std::string& trace_file,
+            TraceGen(TrafficGen& _owner, Tick _duration,
+		     const std::string& trace_file,
                      Addr addr_offset)
-                : BaseGen(_port, master_id, _duration),
+                : BaseGen(_owner, _duration),
                   trace(trace_file),
                   addrOffset(addr_offset),
                   traceComplete(false)
@@ -575,20 +570,51 @@ class TrafficGen : public MemObject
       public:
 
         TrafficGenPort(const std::string& name, TrafficGen& _owner)
-            : QueuedMasterPort(name, &_owner, queue), queue(_owner, *this)
+            : QueuedMasterPort(name, &_owner, queue), queue(_owner, *this),
+	      owner(_owner)
         { }
 
       protected:
 
-        bool recvTimingResp(PacketPtr pkt);
+        bool recvTimingResp(PacketPtr pkt) {
+	    return owner.recvTimingResp(pkt);
+	}
 
       private:
 
         MasterPacketQueue queue;
-
+	TrafficGen &owner;
     };
 
+    /**
+     * Create a new request and associated packet and schedule it to
+     * be sent in the current tick.
+     *
+     * @note This method may return false to indicate that a packet
+     * couldn't be delivered because the maximum number of outstanding
+     * memory requests has been reached.
+     *
+     * @param addr Request address
+     * @param size Request size
+     * @param cmd Memory command
+     * @param data Dynamic array of data associated with the packet.
+     * @return True if the request was sent, false otherwise.
+     */
+    bool send(Addr addr, unsigned size, const MemCmd& cmd, uint8_t *data);
+
+    /**
+     * Handle a timing response from the memory system.
+     *
+     * @see MasterPort::recvTimingResp()
+     */
+    bool recvTimingResp(PacketPtr pkt);
+
     TrafficGenPort port;
+
+    /** Number of requests still pending in the memory system */
+    unsigned pendingRequests;
+    /** Maximum number of pending requests */
+    const unsigned maxPendingRequests;
 
     /** Request generator state graph */
     StateGraph stateGraph;
