@@ -55,6 +55,8 @@
 using namespace LittleEndianGuest;
 using namespace X86ISA;
 
+const Addr X86System::GDTBase = 0x76000;
+
 X86System::X86System(Params *p) :
     System(p), smbiosTable(p->smbios_table),
     mpFloatingPointer(p->intel_mp_pointer),
@@ -110,6 +112,21 @@ installSegDesc(ThreadContext *tc, SegmentRegIndex seg,
 }
 
 void
+X86System::addGdtEntry(uint8_t entry, uint64_t descriptor)
+{
+    physProxy.writeBlob(GDTBase + entry * 8, (uint8_t *)&descriptor, 8);
+}
+
+void
+X86System::selectGdtEntry(int reg, uint8_t entry)
+{
+    SegSelector ss = 0;
+
+    ss.si = entry;
+    threadContexts[0]->setMiscReg(reg, (MiscReg)ss);
+}
+
+void
 X86System::initState()
 {
     System::initState();
@@ -135,7 +152,6 @@ X86System::initState()
     const Addr PageDirPtrTable = 0x71000;
     const Addr PageDirTable[NumPDTs] =
         {0x72000, 0x73000, 0x74000, 0x75000};
-    const Addr GDTBase = 0x76000;
 
     const int PML4Bits = 9;
     const int PDPTBits = 9;
@@ -146,10 +162,7 @@ X86System::initState()
      */
     uint8_t numGDTEntries = 0;
     // Place holder at selector 0
-    uint64_t nullDescriptor = 0;
-    physProxy.writeBlob(GDTBase + numGDTEntries * 8,
-                        (uint8_t *)(&nullDescriptor), 8);
-    numGDTEntries++;
+    addGdtEntry(numGDTEntries++, 0);
 
     //64 bit code segment
     SegDescriptor csDesc = 0;
@@ -162,22 +175,11 @@ X86System::initState()
     csDesc.d = 0; // default operand size
     csDesc.g = 1; // Page granularity
     csDesc.s = 1; // Not a system segment
-    csDesc.limitHigh = 0xF;
-    csDesc.limitLow = 0xFF;
-    //Because we're dealing with a pointer and I don't think it's
-    //guaranteed that there isn't anything in a nonvirtual class between
-    //it's beginning in memory and it's actual data, we'll use an
-    //intermediary.
-    uint64_t csDescVal = csDesc;
-    physProxy.writeBlob(GDTBase + numGDTEntries * 8,
-                        (uint8_t *)(&csDescVal), 8);
+    csDesc.limitHigh = 0x0;
+    csDesc.limitLow = 0xFFFF;
 
-    numGDTEntries++;
-
-    SegSelector cs = 0;
-    cs.si = numGDTEntries - 1;
-
-    tc->setMiscReg(MISCREG_CS, (MiscReg)cs);
+    addGdtEntry(numGDTEntries++, csDesc);
+    selectGdtEntry(MISCREG_CS, numGDTEntries - 1);
 
     //32 bit data segment
     SegDescriptor dsDesc = 0;
@@ -189,22 +191,15 @@ X86System::initState()
     dsDesc.d = 1; // default operand size
     dsDesc.g = 1; // Page granularity
     dsDesc.s = 1; // Not a system segment
-    dsDesc.limitHigh = 0xF;
-    dsDesc.limitLow = 0xFF;
-    uint64_t dsDescVal = dsDesc;
-    physProxy.writeBlob(GDTBase + numGDTEntries * 8,
-                        (uint8_t *)(&dsDescVal), 8);
+    dsDesc.limitHigh = 0x0;
+    dsDesc.limitLow = 0xFFFF;
 
-    numGDTEntries++;
-
-    SegSelector ds = 0;
-    ds.si = numGDTEntries - 1;
-
-    tc->setMiscReg(MISCREG_DS, (MiscReg)ds);
-    tc->setMiscReg(MISCREG_ES, (MiscReg)ds);
-    tc->setMiscReg(MISCREG_FS, (MiscReg)ds);
-    tc->setMiscReg(MISCREG_GS, (MiscReg)ds);
-    tc->setMiscReg(MISCREG_SS, (MiscReg)ds);
+    addGdtEntry(numGDTEntries++, dsDesc);
+    selectGdtEntry(MISCREG_DS, numGDTEntries - 1);
+    selectGdtEntry(MISCREG_ES, numGDTEntries - 1);
+    selectGdtEntry(MISCREG_FS, numGDTEntries - 1);
+    selectGdtEntry(MISCREG_GS, numGDTEntries - 1);
+    selectGdtEntry(MISCREG_SS, numGDTEntries - 1);
 
     tc->setMiscReg(MISCREG_TSL, 0);
     tc->setMiscReg(MISCREG_TSG_BASE, GDTBase);
@@ -216,19 +211,13 @@ X86System::initState()
     tssDesc.p = 1; // Present
     tssDesc.d = 1; // default operand size
     tssDesc.g = 1; // Page granularity
-    tssDesc.s = 1; // Not a system segment
-    tssDesc.limitHigh = 0xF;
-    tssDesc.limitLow = 0xFF;
-    uint64_t tssDescVal = tssDesc;
-    physProxy.writeBlob(GDTBase + numGDTEntries * 8,
-                        (uint8_t *)(&tssDescVal), 8);
+    tssDesc.s = 0;
+    tssDesc.limitHigh = 0x0;
+    tssDesc.limitLow = 0xFFFF;
 
-    numGDTEntries++;
+    addGdtEntry(numGDTEntries++, tssDesc);
+    selectGdtEntry(MISCREG_TR, numGDTEntries - 1);
 
-    SegSelector tss = 0;
-    tss.si = numGDTEntries - 1;
-
-    tc->setMiscReg(MISCREG_TR, (MiscReg)tss);
     installSegDesc(tc, SYS_SEGMENT_REG_TR, tssDesc, true);
 
     /*

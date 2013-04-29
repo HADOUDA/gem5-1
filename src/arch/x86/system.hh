@@ -97,6 +97,23 @@ class X86System : public System
         //XXX This may eventually have to do something useful.
         return addr;
     }
+
+    /**
+     * Helper function to install a GDT entry.
+     *
+     * @param entry GDT entry to install
+     * @param descriptor Descriptor to write into the GDT entry
+     */
+    void addGdtEntry(uint8_t entry, uint64_t descriptor);
+    /**
+     * Helper function to select a GDT entry.
+     *
+     * @param reg Segement selector register
+     * @param entry GDT entry to select
+     */
+    void selectGdtEntry(int reg, uint8_t entry);
+
+    static const Addr GDTBase;
 };
 
 #endif
