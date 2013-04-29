@@ -42,6 +42,7 @@
 #include "arch/x86/regs/misc.hh"
 #include "arch/x86/isa_traits.hh"
 #include "arch/x86/system.hh"
+#include "arch/x86/utility.hh"
 #include "arch/vtophys.hh"
 #include "base/loader/object_file.hh"
 #include "base/loader/symtab.hh"
@@ -65,89 +66,26 @@ X86System::X86System(Params *p) :
 {
 }
 
-static void
-installSegDesc(ThreadContext *tc, SegmentRegIndex seg,
-        SegDescriptor desc, bool longmode)
-{
-    uint64_t base = desc.baseLow + (desc.baseHigh << 24);
-    bool honorBase = !longmode || seg == SEGMENT_REG_FS ||
-                                  seg == SEGMENT_REG_GS ||
-                                  seg == SEGMENT_REG_TSL ||
-                                  seg == SYS_SEGMENT_REG_TR;
-    uint64_t limit = desc.limitLow | (desc.limitHigh << 16);
-
-    SegAttr attr = 0;
-
-    attr.dpl = desc.dpl;
-    attr.unusable = 0;
-    attr.defaultSize = desc.d;
-    attr.longMode = desc.l;
-    attr.avl = desc.avl;
-    attr.granularity = desc.g;
-    attr.present = desc.p;
-    attr.system = desc.s;
-    attr.type = desc.type;
-    if (desc.s) {
-        if (desc.type.codeOrData) {
-            // Code segment
-            attr.expandDown = 0;
-            attr.readable = desc.type.r;
-            attr.writable = 0;
-        } else {
-            // Data segment
-            attr.expandDown = desc.type.e;
-            attr.readable = 1;
-            attr.writable = desc.type.w;
-        }
-    } else {
-        attr.readable = 1;
-        attr.writable = 1;
-        attr.expandDown = 0;
-    }
-
-    tc->setMiscReg(MISCREG_SEG_BASE(seg), base);
-    tc->setMiscReg(MISCREG_SEG_EFF_BASE(seg), honorBase ? base : 0);
-    tc->setMiscReg(MISCREG_SEG_LIMIT(seg), limit);
-    tc->setMiscReg(MISCREG_SEG_ATTR(seg), (MiscReg)attr);
-}
-
 void
 X86System::addGdtEntry(uint8_t entry, uint64_t descriptor)
 {
     physProxy.writeBlob(GDTBase + entry * 8, (uint8_t *)&descriptor, 8);
 }
 
-void
-X86System::selectGdtEntry(int reg, uint8_t entry)
+static void
+selectGdtEntry(ThreadContext *tc,
+               SegmentRegIndex seg, uint8_t entry, SegDescriptor desc)
 {
     SegSelector ss = 0;
 
     ss.si = entry;
-    threadContexts[0]->setMiscReg(reg, (MiscReg)ss);
+    installSegmentDescriptor(tc, seg, ss, desc);
 }
 
 void
-X86System::initState()
+X86System::setupPageTables()
 {
-    System::initState();
-
-    if (!kernel)
-        fatal("No kernel to load.\n");
-
-    if (kernel->getArch() == ObjectFile::I386)
-        fatal("Loading a 32 bit x86 kernel is not supported.\n");
-
-    ThreadContext *tc = threadContexts[0];
-    // This is the boot strap processor (BSP). Initialize it to look like
-    // the boot loader has just turned control over to the 64 bit OS. We
-    // won't actually set up real mode or legacy protected mode descriptor
-    // tables because we aren't executing any code that would require
-    // them. We do, however toggle the control bits in the correct order
-    // while allowing consistency checks and the underlying mechansims
-    // just to be safe.
-
     const int NumPDTs = 4;
-
     const Addr PageMapLevel4 = 0x70000;
     const Addr PageDirPtrTable = 0x71000;
     const Addr PageDirTable[NumPDTs] =
@@ -156,69 +94,6 @@ X86System::initState()
     const int PML4Bits = 9;
     const int PDPTBits = 9;
     const int PDTBits = 9;
-
-    /*
-     * Set up the gdt.
-     */
-    uint8_t numGDTEntries = 0;
-    // Place holder at selector 0
-    addGdtEntry(numGDTEntries++, 0);
-
-    //64 bit code segment
-    SegDescriptor csDesc = 0;
-    csDesc.type.codeOrData = 1;
-    csDesc.type.c = 0; // Not conforming
-    csDesc.type.r = 1; // Readable
-    csDesc.dpl = 0; // Privelege level 0
-    csDesc.p = 1; // Present
-    csDesc.l = 1; // 64 bit
-    csDesc.d = 0; // default operand size
-    csDesc.g = 1; // Page granularity
-    csDesc.s = 1; // Not a system segment
-    csDesc.limitHigh = 0x0;
-    csDesc.limitLow = 0xFFFF;
-
-    addGdtEntry(numGDTEntries++, csDesc);
-    selectGdtEntry(MISCREG_CS, numGDTEntries - 1);
-
-    //32 bit data segment
-    SegDescriptor dsDesc = 0;
-    dsDesc.type.codeOrData = 0;
-    dsDesc.type.e = 0; // Not expand down
-    dsDesc.type.w = 1; // Writable
-    dsDesc.dpl = 0; // Privelege level 0
-    dsDesc.p = 1; // Present
-    dsDesc.d = 1; // default operand size
-    dsDesc.g = 1; // Page granularity
-    dsDesc.s = 1; // Not a system segment
-    dsDesc.limitHigh = 0x0;
-    dsDesc.limitLow = 0xFFFF;
-
-    addGdtEntry(numGDTEntries++, dsDesc);
-    selectGdtEntry(MISCREG_DS, numGDTEntries - 1);
-    selectGdtEntry(MISCREG_ES, numGDTEntries - 1);
-    selectGdtEntry(MISCREG_FS, numGDTEntries - 1);
-    selectGdtEntry(MISCREG_GS, numGDTEntries - 1);
-    selectGdtEntry(MISCREG_SS, numGDTEntries - 1);
-
-    tc->setMiscReg(MISCREG_TSL, 0);
-    tc->setMiscReg(MISCREG_TSG_BASE, GDTBase);
-    tc->setMiscReg(MISCREG_TSG_LIMIT, 8 * numGDTEntries - 1);
-
-    SegDescriptor tssDesc = 0;
-    tssDesc.type = 0xB;
-    tssDesc.dpl = 0; // Privelege level 0
-    tssDesc.p = 1; // Present
-    tssDesc.d = 1; // default operand size
-    tssDesc.g = 1; // Page granularity
-    tssDesc.s = 0;
-    tssDesc.limitHigh = 0x0;
-    tssDesc.limitLow = 0xFFFF;
-
-    addGdtEntry(numGDTEntries++, tssDesc);
-    selectGdtEntry(MISCREG_TR, numGDTEntries - 1);
-
-    installSegDesc(tc, SYS_SEGMENT_REG_TR, tssDesc, true);
 
     /*
      * Identity map the first 4GB of memory. In order to map this region
@@ -261,7 +136,6 @@ X86System::initState()
     }
 
     // Page Directory Tables
-
     Addr base = 0;
     const Addr pageSize = 2 << 20;
     for (int table = 0; table < NumPDTs; table++) {
@@ -273,46 +147,143 @@ X86System::initState()
             base += pageSize;
         }
     }
+}
+
+
+void
+X86System::initState()
+{
+    System::initState();
+    ObjectFile::Arch kArch(kernel->getArch());
+    bool needLongMode;
+
+    if (!kernel)
+        fatal("No kernel to load.\n");
+
+    if (kArch == ObjectFile::I386) {
+        warn("Loading a 32 bit x86 kernel is not supported.\n");
+        needLongMode = false;
+    } else if (kernel->getArch() == ObjectFile::X86_64) {
+        needLongMode = true;
+    } else {
+        panic("Unsupported kernel type.\n");
+    }
+
+    ThreadContext *tc = threadContexts[0];
+    // This is the boot strap processor (BSP). Initialize it to look like
+    // the boot loader has just turned control over to the 64 bit OS. We
+    // won't actually set up real mode or legacy protected mode descriptor
+    // tables because we aren't executing any code that would require
+    // them. We do, however toggle the control bits in the correct order
+    // while allowing consistency checks and the underlying mechansims
+    // just to be safe.
 
     /*
-     * Transition from real mode all the way up to Long mode
+     * Set up the gdt.
+     */
+    uint8_t numGDTEntries = 0;
+    // Place holder at selector 0
+    addGdtEntry(numGDTEntries++, 0);
+    // Linux the cs segment at selector 2, so we treat selector 1 as a
+    // place holder as well.
+    addGdtEntry(numGDTEntries++, 0);
+
+    // 32 bit code segment
+    SegDescriptor csDesc = 0;
+    csDesc.type.codeOrData = 1;
+    csDesc.type.c = 0; // Not conforming
+    csDesc.type.r = 1; // Readable
+    csDesc.type.a = 1;
+    csDesc.dpl = 0; // Privilege level 0
+    csDesc.p = 1; // Present
+    if (needLongMode) {
+        csDesc.l = 1; // Long Mode (64-bit)
+        csDesc.d = 0;
+    } else {
+        csDesc.d = 1; // default operand size (32-bit)
+    }
+    csDesc.g = 1; // Page granularity
+    csDesc.s = 1; // Not a system segment
+    csDesc.limitHigh = 0xF;
+    csDesc.limitLow = 0xFFFF;
+
+    const uint8_t csIdx(numGDTEntries++);
+    addGdtEntry(csIdx, csDesc);
+
+    // 32 bit data segment
+    SegDescriptor dsDesc = 0;
+    dsDesc.type.codeOrData = 0;
+    dsDesc.type.e = 0; // Not expand down
+    dsDesc.type.w = 1; // Writable
+    dsDesc.type.a = 1;
+    dsDesc.dpl = 0; // Privelege level 0
+    dsDesc.p = 1; // Present
+    dsDesc.b = 1; // default operand size (32-bit)
+    dsDesc.g = 1; // Page granularity
+    dsDesc.s = 1; // Not a system segment
+    dsDesc.limitHigh = 0xF;
+    dsDesc.limitLow = 0xFFFF;
+
+    const uint8_t dsIdx(numGDTEntries++);
+    addGdtEntry(dsIdx, dsDesc);
+
+    SegDescriptor tssDesc = 0;
+    tssDesc.type = 0xB;
+    tssDesc.dpl = 0; // Privelege level 0
+    tssDesc.p = 1; // Present
+    tssDesc.d = 1; // default operand size
+    tssDesc.g = 1; // Page granularity
+    tssDesc.s = 0;
+    tssDesc.limitHigh = 0xF;
+    tssDesc.limitLow = 0xFFFF;
+
+    const uint8_t tssIdx(numGDTEntries++);
+
+    addGdtEntry(tssIdx, tssDesc);
+
+    tc->setMiscReg(MISCREG_TSL, 0);
+    tc->setMiscReg(MISCREG_TSG_BASE, GDTBase);
+    tc->setMiscReg(MISCREG_TSG_LIMIT, 8 * numGDTEntries - 1);
+
+    selectGdtEntry(tc, SEGMENT_REG_CS, csIdx, csDesc);
+    selectGdtEntry(tc, SEGMENT_REG_DS, dsIdx, dsDesc);
+    selectGdtEntry(tc, SEGMENT_REG_ES, dsIdx, dsDesc);
+    selectGdtEntry(tc, SEGMENT_REG_FS, dsIdx, dsDesc);
+    selectGdtEntry(tc, SEGMENT_REG_GS, dsIdx, dsDesc);
+    selectGdtEntry(tc, SEGMENT_REG_SS, dsIdx, dsDesc);
+    selectGdtEntry(tc, SYS_SEGMENT_REG_TR, tssIdx, tssDesc);
+
+    /*
+     * Transition from real mode to protected mode.
      */
     CR0 cr0 = tc->readMiscRegNoEffect(MISCREG_CR0);
-    //Turn off paging.
+    //Turn off paging and turn on protected mode.
     cr0.pg = 0;
-    tc->setMiscReg(MISCREG_CR0, cr0);
-    //Turn on protected mode.
     cr0.pe = 1;
     tc->setMiscReg(MISCREG_CR0, cr0);
 
-    CR4 cr4 = tc->readMiscRegNoEffect(MISCREG_CR4);
-    //Turn on pae.
-    cr4.pae = 1;
-    tc->setMiscReg(MISCREG_CR4, cr4);
+    if (needLongMode) {
+        // Create page tables that identity map memory
+        const Addr PageMapLevel4 = 0x70000;
+        setupPageTables();
+        tc->setMiscReg(MISCREG_CR3, PageMapLevel4);
 
-    //Point to the page tables.
-    tc->setMiscReg(MISCREG_CR3, PageMapLevel4);
+        //Turn on pae.
+        CR4 cr4 = tc->readMiscRegNoEffect(MISCREG_CR4);
+        cr4.pae = 1;
+        tc->setMiscReg(MISCREG_CR4, cr4);
 
-    Efer efer = tc->readMiscRegNoEffect(MISCREG_EFER);
-    //Enable long mode.
-    efer.lme = 1;
-    tc->setMiscReg(MISCREG_EFER, efer);
+        Efer efer = tc->readMiscRegNoEffect(MISCREG_EFER);
+        //Enable long mode.
+        efer.lme = 1;
+        tc->setMiscReg(MISCREG_EFER, efer);
 
-    //Start using longmode segments.
-    installSegDesc(tc, SEGMENT_REG_CS, csDesc, true);
-    installSegDesc(tc, SEGMENT_REG_DS, dsDesc, true);
-    installSegDesc(tc, SEGMENT_REG_ES, dsDesc, true);
-    installSegDesc(tc, SEGMENT_REG_FS, dsDesc, true);
-    installSegDesc(tc, SEGMENT_REG_GS, dsDesc, true);
-    installSegDesc(tc, SEGMENT_REG_SS, dsDesc, true);
-
-    //Activate long mode.
-    cr0.pg = 1;
-    tc->setMiscReg(MISCREG_CR0, cr0);
+        //Activate paging
+        cr0.pg = 1;
+        tc->setMiscReg(MISCREG_CR0, cr0);
+    }
 
     tc->pcState(tc->getSystemPtr()->kernelEntry);
-
-    // We should now be in long mode. Yay!
 
     Addr ebdaPos = 0xF0000;
     Addr fixed, table;

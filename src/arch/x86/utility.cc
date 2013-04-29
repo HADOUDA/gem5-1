@@ -232,5 +232,64 @@ skipFunction(ThreadContext *tc)
     panic("Not implemented for x86\n");
 }
 
+void
+installSegmentDescriptor(ThreadContext *tc,
+                         SegmentRegIndex seg,
+                         SegSelector selector, SegDescriptor desc)
+{
+    tc->setMiscReg(MISCREG_SEG_SEL(seg), (MiscReg)selector);
+
+    if (selector.si || selector.ti) {
+        if (!desc.p)
+            panic("Segment not present.\n");
+
+        SegAttr attr = 0;
+        attr.dpl = desc.dpl;
+        attr.unusable = 0;
+        attr.defaultSize = desc.d;
+        attr.longMode = desc.l;
+        attr.avl = desc.avl;
+        attr.granularity = desc.g;
+        attr.present = desc.p;
+        attr.system = desc.s;
+        attr.type = desc.type;
+        if (!desc.s) {
+            // The expand down bit happens to be set for gates.
+            if (desc.type.e)
+                panic("Gate descriptor encountered.\n");
+
+            attr.readable = 1;
+            attr.writable = 1;
+            attr.expandDown = 0;
+        } else {
+            if (desc.type.codeOrData) {
+                attr.expandDown = 0;
+                attr.readable = desc.type.r;
+                attr.writable = 0;
+            } else {
+                attr.expandDown = desc.type.e;
+                attr.readable = 1;
+                attr.writable = desc.type.w;
+            }
+        }
+        Addr base = desc.baseLow | (desc.baseHigh << 24);
+        Addr limit = desc.limitLow | (desc.limitHigh << 16);
+        if (desc.g)
+            limit = (limit << 12) | mask(12);
+
+        tc->setMiscReg(MISCREG_SEG_BASE(seg), base);
+        tc->setMiscReg(MISCREG_SEG_EFF_BASE(seg), base);
+        tc->setMiscReg(MISCREG_SEG_LIMIT(seg), limit);
+        tc->setMiscReg(MISCREG_SEG_ATTR(seg), (MiscReg)attr);
+    } else {
+        // GDT index 0 is the null segment selector. Any access to a
+        // that segment should result in an exception. Set base and
+        // limit to 0 to ensure this.
+        tc->setMiscReg(MISCREG_SEG_BASE(seg), 0);
+        tc->setMiscReg(MISCREG_SEG_EFF_BASE(seg), 0);
+        tc->setMiscReg(MISCREG_SEG_LIMIT(seg), 0);
+        tc->setMiscReg(MISCREG_SEG_ATTR(seg), 0);
+    }
+}
 
 } // namespace X86_ISA

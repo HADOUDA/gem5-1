@@ -29,6 +29,7 @@
 from m5.params import *
 from m5.proxy import *
 from Cmos import Cmos
+from Device import IsaFake
 from I8042 import I8042
 from I82094AA import I82094AA
 from I8237 import I8237
@@ -50,6 +51,9 @@ class SouthBridge(SimObject):
 
     _pic1 = I8259(pio_addr=x86IOAddress(0x20), mode='I8259Master')
     _pic2 = I8259(pio_addr=x86IOAddress(0xA0), mode='I8259Slave')
+    # Fake the Interrupt Mode Control Register in the PIC Master
+    fake_imcr = IsaFake(pio_addr=x86IOAddress(0x22), pio_size=2)
+
     _cmos = Cmos(pio_addr=x86IOAddress(0x70))
     _dma1 = I8237(pio_addr=x86IOAddress(0x0))
     _keyboard = I8042(data_port=x86IOAddress(0x60), \
@@ -110,6 +114,7 @@ class SouthBridge(SimObject):
                 self.ide.dma = bus.slave
         self.keyboard.pio = bus.master
         self.pic1.pio = bus.master
+        self.fake_imcr.pio = bus.master
         self.pic2.pio = bus.master
         self.pit.pio = bus.master
         self.speaker.pio = bus.master

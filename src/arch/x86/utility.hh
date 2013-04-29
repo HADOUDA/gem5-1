@@ -105,6 +105,9 @@ namespace X86ISA
         return 0;
     }
 
+    void installSegmentDescriptor(ThreadContext *tc,
+                                  SegmentRegIndex seg,
+                                  SegSelector selector, SegDescriptor desc);
 }
 
 #endif // __ARCH_X86_UTILITY_HH__
