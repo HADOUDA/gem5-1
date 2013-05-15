@@ -237,7 +237,8 @@ class Decoder
         if (amIter != addrCacheMap.end()) {
             decodePages = amIter->second;
         } else {
-            decodePages = new DecodePages;
+            // Only cache 4096 pages (16 MiB)
+            decodePages = new DecodePages(4096);
             addrCacheMap[m5Reg] = decodePages;
         }
 

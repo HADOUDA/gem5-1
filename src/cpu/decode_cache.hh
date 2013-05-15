@@ -101,6 +101,10 @@ class AddrMap
             return it->second;
         }
 
+        if (prune_degree > 0 &&
+            pageMap.size() >= max_size)
+            prune();
+
         // Didn't find an existing page, so add a new one.
         CachePage *newPage = new CachePage;
         page_addr = page_addr & ~(TheISA::PageBytes - 1);
@@ -109,9 +113,69 @@ class AddrMap
         return newPage;
     }
 
+    void
+    prune()
+    {
+        assert(prune_degree > 0);
+
+        if (prune_degree == 0xFF) {
+            // A prune degree of 0xFF means that all entries should be
+            // flushed. This is a special case that can be better optimized.
+            flush();
+        } else {
+            // We use a simple LCG to select random elements to prune. The
+            // LCG isn't very good from a numerical point of view, but it
+            // is fast and simple.
+            uint64_t lcg_cur(curTick() ^ (curTick() >> 32));
+            // Use the constants from MMIX
+            const uint64_t lcg_a(6364136223846793005ULL);
+            const uint64_t lcg_c(1442695040888963407ULL);
+
+            PageIt it(pageMap.begin());
+            while (it != pageMap.end()) {
+                lcg_cur = lcg_a * lcg_cur + lcg_c;
+
+                if ((lcg_cur & 0xFF) < prune_degree &&
+                    recent[0] != it &&
+                    recent[1] != it) {
+                    delete it->second;
+                    it = pageMap.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        }
+    }
+
+    const size_t max_size;
+    const uint8_t prune_degree;
+
   public:
     /// Constructor
     AddrMap()
+        : max_size((size_t)-1),
+          prune_degree(0)
+    {
+        recent[0] = recent[1] = pageMap.end();
+    }
+
+    /**
+     * Construct a cache with a limited size.
+     *
+     * When the maximum size of the container is reached, an automatic
+     * prune is triggered. This causes random elements to be thrown
+     * away from the cache. The likelihood that an element gets
+     * flushed is proportional to prune_degree, which is an integer in
+     * the range [0, 0xFF]. Setting prune_degree to 0 disables
+     * pruning, while setting it to 0xFF causes every element, except
+     * for the two elements in the small cache, to be pruned.
+     *
+     * @param max_size Maximum size before a prune is triggered.
+     * @param prune_degree Likelihood that an element gets pruned.
+     */
+    AddrMap(size_t max_size, uint8_t prune_degree = 0x80)
+        : max_size(max_size),
+          prune_degree(prune_degree)
     {
         recent[0] = recent[1] = pageMap.end();
     }
@@ -121,6 +185,19 @@ class AddrMap
     {
         CachePage *page = getPage(addr);
         return page->items[addr & (TheISA::PageBytes - 1)];
+    }
+
+    /**
+     * Flush all cached entries.
+     */
+    void
+    flush()
+    {
+        for (PageIt it = pageMap.begin(); it != pageMap.end(); ++it)
+            delete it->second;
+
+        pageMap.clear();
+        recent[0] = recent[1] = pageMap.end();
     }
 };
 

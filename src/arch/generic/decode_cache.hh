@@ -51,6 +51,9 @@ class BasicDecodeCache
     DecodeCache::AddrMap<StaticInstPtr> decodePages;
 
   public:
+    BasicDecodeCache(size_t max_size = 4096)
+        : decodePages(max_size) {}
+
     /// Decode a machine instruction.
     /// @param mach_inst The binary instruction to decode.
     /// @retval A pointer to the corresponding StaticInst object.
