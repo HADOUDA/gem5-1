@@ -439,6 +439,12 @@ class BaseCache : public MemObject
      */
     virtual void regStats();
 
+    /**
+     * Return the <i>current</i> cache occupancy as a fraction in the
+     * range [0, 1].
+     */
+    virtual double getOccupancy() const = 0;
+
   public:
     typedef BaseCacheParams Params;
     BaseCache(const Params *p);
@@ -581,7 +587,6 @@ class BaseCache : public MemObject
         hits[pkt->cmdToIndex()][pkt->req->masterId()]++;
 
     }
-
 };
 
 #endif //__BASE_CACHE_HH__

@@ -109,3 +109,9 @@ BaseTags::regStats(const string &name)
 
     registerExitCallback(new BaseTagsCallback(this));
 }
+
+double
+BaseTags::getOccupancy() const
+{
+    return (double)tagsInUse.value() / numBlocks;
+}

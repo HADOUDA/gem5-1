@@ -164,6 +164,12 @@ class BaseTags
      * Print all tags used
      */
     virtual std::string print() const = 0;
+
+    /**
+     * Return the <i>current</i> cache occupancy as a fraction in the
+     * range [0, 1].
+     */
+    double getOccupancy() const;
 };
 
 class BaseTagsCallback : public Callback
