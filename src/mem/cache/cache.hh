@@ -410,6 +410,8 @@ class Cache : public BaseCache
 
     void regStats();
 
+    double getOccupancy() const { return tags->getOccupancy(); }
+
     /** serialize the state of the caches
      * We currently don't support checkpointing cache state, so this panics.
      */
