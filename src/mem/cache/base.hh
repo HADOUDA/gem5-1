@@ -430,6 +430,8 @@ class BaseCache : public MemObject
 
     Stats::Scalar mshr_no_allocate_misses;
 
+    /** Current cache occupancy as a fraction in the range [0, 1]. */
+    Stats::Value currentOccupacy;
     /**
      * @}
      */
@@ -587,6 +589,14 @@ class BaseCache : public MemObject
         hits[pkt->cmdToIndex()][pkt->req->masterId()]++;
 
     }
+
+    struct OccupancyFunctor {
+        OccupancyFunctor(const BaseCache &_cache) : cache(_cache) {}
+        double operator()() const { return cache.getOccupancy(); }
+      private:
+        const BaseCache &cache;
+    };
+    OccupancyFunctor occupancyFunctor;
 };
 
 #endif //__BASE_CACHE_HH__

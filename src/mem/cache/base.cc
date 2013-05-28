@@ -79,7 +79,8 @@ BaseCache::BaseCache(const Params *p)
       noTargetMSHR(NULL),
       missCount(p->max_miss_count),
       addrRanges(p->addr_ranges.begin(), p->addr_ranges.end()),
-      system(p->system)
+      system(p->system),
+      occupancyFunctor(*this)
 {
 }
 
@@ -749,6 +750,11 @@ BaseCache::regStats()
         .desc("Number of misses that were no-allocate")
         ;
 
+    currentOccupacy
+        .functor(occupancyFunctor)
+        .name(name() + ".current_occupancy")
+        .desc("Fraction of the cache currently occupied.")
+        ;
 }
 
 unsigned int
