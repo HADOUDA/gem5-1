@@ -59,7 +59,6 @@ void
 cleanupDrainManager(DrainManager *drain_manager)
 {
     assert(drain_manager);
-    assert(drain_manager->getCount() == 0);
     delete drain_manager;
 }
 

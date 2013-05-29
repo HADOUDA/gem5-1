@@ -55,6 +55,7 @@ from m5.util.dot_writer import do_dot
 from m5.internal.stats import updateEvents as updateStatEvents
 
 from util import fatal
+from util import warn
 from util import attrdict
 
 # define a MaxTick parameter
@@ -163,29 +164,64 @@ atexit.register(stats.dump)
 # register our C++ exit callback function with Python
 atexit.register(internal.core.doExitCleanup)
 
-# Drain the system in preparation of a checkpoint or memory mode
-# switch.
 def drain(root):
+    """Try to a system in preparation of a checkpoint, memory mode
+    switch or CPU handover.
+
+    Warning: Draining of the system can fail if the system is
+    inconsistent and needs further simulation and that triggers an
+    exit event. It is the responsability of the caller to ensure that
+    adequate draining is performed by calling drain again if the event
+    is non-fatal.
+
+    Arguments:
+      system -- Simulated system.
+
+    Returns:
+      A (drained, exit_event) tuple. drained is true if draining
+      suceeded, false otherwise. exit_event is set if drained is
+      False, it's None otherwise.
+    """
+
     # Try to drain all objects. Draining might not be completed unless
     # all objects return that they are drained on the first call. This
     # is because as objects drain they may cause other objects to no
     # longer be drained.
     def _drain():
-        all_drained = False
         dm = internal.drain.createDrainManager()
         unready_objs = sum(obj.drain(dm) for obj in root.descendants())
         # If we've got some objects that can't drain immediately, then simulate
         if unready_objs > 0:
             dm.setCount(unready_objs)
-            simulate()
+            exit_event = simulate()
+            internal.drain.cleanupDrainManager(dm)
+            return False, exit_event
         else:
-            all_drained = True
-        internal.drain.cleanupDrainManager(dm)
-        return all_drained
+            internal.drain.cleanupDrainManager(dm)
+            return True, None
 
-    all_drained = _drain()
-    while (not all_drained):
-        all_drained = _drain()
+    while True:
+        all_drained, event = _drain()
+        if all_drained:
+            assert event == None, "Unexpected exit event from _drain()"
+            return (True, None)
+        elif event != None and event.getCause() != "Finished drain":
+            return (False, event)
+
+def legacyDrain(root):
+    """Drain a system in like the old scripts used to do.
+
+    Unlike drain(), this method continues to run the simulation until
+    it is completely drained, ignoring any exit events.
+
+    Warning: New configuration scripts should not use this function as
+    it is prone to lose exit events.
+    """
+    drain_done = False
+    while not drain_done:
+        drain_done, exit_event = drain(root)
+        if not drain_done:
+            warn("Discarding exit event: %s" % exit_event.getCause())
 
 def memWriteback(root):
     for obj in root.descendants():
@@ -198,22 +234,32 @@ def memInvalidate(root):
 def resume(root):
     for obj in root.descendants(): obj.drainResume()
 
-def checkpoint(dir):
+def checkpoint(dir, do_drain=True):
+    """Checkpoint the simulation.
+
+    Warning: This method drains the system using legacyDrain() by
+    default and may discard exit events. New simulation scripts should
+    drain manually and set do_drain to False.
+
+    Keyword Arguments:
+      do_drain -- Perform an automatic drain/resume of the system.
+    """
     root = objects.Root.getInstance()
     if not isinstance(root, objects.Root):
         raise TypeError, "Checkpoint must be called on a root object."
-    drain(root)
+    if do_drain:
+        legacyDrain(root)
     memWriteback(root)
     print "Writing checkpoint"
     internal.core.serializeAll(dir)
-    resume(root)
+    if do_drain:
+        resume(root)
 
 def _changeMemoryMode(system, mode):
     if not isinstance(system, (objects.Root, objects.System)):
         raise TypeError, "Parameter of type '%s'.  Must be type %s or %s." % \
               (type(system), objects.Root, objects.System)
     if system.getMemoryMode() != mode:
-        drain(system)
         system.setMemoryMode(mode)
     else:
         print "System already in target mode. Memory mode unchanged."
@@ -230,6 +276,10 @@ def switchCpus(system, cpuList, do_drain=True):
     Note: This method may switch the memory mode of the system if that
     is required by the CPUs. It may also flush all caches in the
     system.
+
+    Warning: This method drains the system using legacyDrain() by
+    default and may discard exit events. New simulation scripts should
+    drain manually and set do_drain to False.
 
     Arguments:
       system -- Simulated system.
@@ -280,7 +330,7 @@ def switchCpus(system, cpuList, do_drain=True):
         raise RuntimeError, "Invalid memory mode (%s)" % memory_mode_name
 
     if do_drain:
-        drain(system)
+        legacyDrain(system)
 
     # Now all of the CPUs are ready to be switched out
     for old_cpu, new_cpu in cpuList:
