@@ -300,30 +300,52 @@ let {{
                     "InstRegIndex(FLOATREG_MICROFP0)", \
                     **kwargs)
 
-    # These probably shouldn't look at the ExtMachInst directly to figure
-    # out what size to use and should instead delegate that to the macroop's
-    # constructor. That would be more efficient, and it would make the
-    # microops a little more modular.
+    # Convert an integer value to a floating point value
     class cvtf_i2d(ConvOp):
         code = '''
-            X86IntReg intReg = SSrcReg1;
-            if (REX_W)
-                FpDestReg = intReg.SR;
-            else
-                FpDestReg = intReg.SE;
-            '''
+            switch (dataSize)
+            {
+              case 2:
+                FpDestReg = (double)((int16_t)SSrcReg1);
+                break;
+
+              case 4:
+                FpDestReg = (double)((int32_t)SSrcReg1);
+                break;
+
+              case 8:
+                FpDestReg = (double)((int64_t)SSrcReg1);
+                break;
+
+              default:
+                panic("Unhandled data size in cvtf_i2d.\\n");
+            };
+        '''
 
     class cvtf_i2d_hi(ConvOp):
         code = 'FpDestReg = bits(SSrcReg1, 63, 32);'
 
+    # Convert (truncate) a floating point value to an integer
     class cvtf_d2i(ConvOp):
         code = '''
-            int64_t intSrcReg1 = static_cast<int64_t>(FpSrcReg1);
-            if (REX_W)
-                SDestReg = intSrcReg1;
-            else
-                SDestReg = merge(SDestReg, intSrcReg1, 4);
-            '''
+            switch (dataSize)
+            {
+              case 2:
+                SDestReg = (int16_t)FpSrcReg1;
+                break;
+
+              case 4:
+                SDestReg = (int32_t)FpSrcReg1;
+                break;
+
+              case 8:
+                SDestReg = (int64_t)FpSrcReg1;
+                break;
+
+              default:
+                panic("Unhandled data size in cvtf_d2i.\\n");
+            };
+        '''
 
     # Convert two integers registers representing an 80-bit floating
     # point number to an x87 register.

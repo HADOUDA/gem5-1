@@ -1,14 +1,5 @@
-# Copyright (c) 2007 The Hewlett-Packard Development Company
+# Copyright (c) 2013 Andreas Sandberg
 # All rights reserved.
-#
-# The license below extends only to copyright in the software and shall
-# not be construed as granting a license to any other intellectual
-# property including but not limited to intellectual property relating
-# to a hardware implementation of the functionality of the software
-# licensed hereunder.  You may use the software subject to the license
-# terms below provided that you ensure that this notice is replicated
-# unmodified and in its entirety in all distributions of the software,
-# modified or unmodified, in source code or in binary form.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -33,11 +24,34 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-# Authors: Gabe Black
+# Authors: Andreas Sandberg
 
 microcode = '''
-# FILD
+
+def macroop FILD_M {
+    ld t1, seg, sib, disp
+    cvtf_i2d st(-1), t1, spm=-1
+};
+
+def macroop FILD_P {
+    rdip t7
+    ld t1, seg, riprel, disp
+    cvtf_i2d st(-1), t1, spm=-1
+};
+
+def macroop FISTTP_M {
+    cvtf_d2i t1, st(0)
+    st t1, seg, sib, disp
+    pop87
+};
+
+def macroop FISTTP_P {
+    rdip t7
+    cvtf_d2i t1, st(0)
+    st t1, seg, riprel, disp
+    pop87
+};
+
 # FIST
 # FISTP
-# FISTTP
 '''
