@@ -1,14 +1,5 @@
-# Copyright (c) 2007 The Hewlett-Packard Development Company
+# Copyright (c) 2013 Andreas Sandberg
 # All rights reserved.
-#
-# The license below extends only to copyright in the software and shall
-# not be construed as granting a license to any other intellectual
-# property including but not limited to intellectual property relating
-# to a hardware implementation of the functionality of the software
-# licensed hereunder.  You may use the software subject to the license
-# terms below provided that you ensure that this notice is replicated
-# unmodified and in its entirety in all distributions of the software,
-# modified or unmodified, in source code or in binary form.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -33,12 +24,45 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-# Authors: Gabe Black
+# Authors: Andreas Sandberg
 
 microcode = '''
-# FSUB
-# FSUBP
-# FISUB
+def macroop FSUB2_R {
+    subfp sti, st(0), sti
+};
+
+def macroop FSUB_M {
+    ldfp87 ufp1, seg, sib, disp
+    subfp st(0), st(0), ufp1
+};
+
+def macroop FSUB_P {
+    rdip t7
+    ldfp87 ufp1, seg, riprel, disp
+    subfp st(0), ufp1, st(0)
+};
+
+def macroop FSUB_R {
+    subfp st(0), st(0), sti
+};
+
+def macroop FSUBP_R {
+    subfp sti, sti, st(0), spm=1
+};
+
+def macroop FISUB_M {
+    ld t1, seg, sib, disp
+    cvtf_i2d ufp1, t1
+    subfp st(0), st(0), ufp1
+};
+
+def macroop FISUB_P {
+    rdip t7
+    ld t1, seg, riprel, disp
+    cvtf_i2d ufp1, t1
+    subfp st(0), st(0), ufp1
+};
+
 # FSUBR
 # FSUBRP
 # FISUBR

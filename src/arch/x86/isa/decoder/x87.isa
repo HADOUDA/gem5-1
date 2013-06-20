@@ -42,11 +42,11 @@ format WarnUnimpl {
         //0x0: esc0();
         0x0: decode MODRM_REG {
             // ST(0) = ST(0) + 32-bit Mem
-            0x0: fadd();
+            0x0: Inst::FADD(Ed);
             0x1: fmul();
             0x2: fcom();
             0x3: fcomp();
-            0x4: fsub();
+            0x4: Inst::FSUB(Ed);
             0x5: fsubr();
             0x6: fdiv();
             0x7: fdivr();
@@ -126,7 +126,7 @@ format WarnUnimpl {
         0x2: decode MODRM_REG {
             0x0: decode MODRM_MOD {
                 0x3: fcmovb();
-                default: fiadd();
+                default: Inst::FIADD(Md);
             }
             0x1: decode MODRM_MOD {
                 0x3: fcmove();
@@ -142,7 +142,7 @@ format WarnUnimpl {
             }
             0x4: decode MODRM_MOD {
                 0x3: Inst::UD2();
-                default: fisub();
+                default: Inst::FISUB(Md);
             }
             0x5: decode MODRM_MOD {
                 0x3: decode MODRM_RM {
@@ -202,7 +202,10 @@ format WarnUnimpl {
         }
         //0x4: esc4();
         0x4: decode MODRM_REG {
-            0x0: fadd();
+            0x0: decode MODRM_MOD {
+                0x3: Inst::FADD2(Rq);
+                default: Inst::FADD(Mq);
+            }
             0x1: fmul();
             0x2: decode MODRM_MOD {
                 0x3: Inst::UD2();
@@ -213,11 +216,11 @@ format WarnUnimpl {
                 default: fcomp();
             }
             0x4: decode MODRM_MOD {
-                0x3: fsubr();
-                default: fsub();
+                0x3: Inst::FSUB2(Rq);
+                default: Inst::FSUB(Mq);
             }
             0x5: decode MODRM_MOD {
-                0x3: fsub();
+                0x3: Inst::FSUB(Rq);
                 default: fsubr();
             }
             0x6: decode MODRM_MOD {
@@ -262,8 +265,8 @@ format WarnUnimpl {
         //0x6: esc6();
         0x6: decode MODRM_REG {
             0x0: decode MODRM_MOD {
-                0x3: faddp();
-                default: fiadd();
+                0x3: Inst::FADDP(Rq);
+                default: Inst::FIADD(Mw);
             }
             0x1: decode MODRM_MOD {
                 0x3: fmulp();
@@ -282,10 +285,10 @@ format WarnUnimpl {
             }
             0x4: decode MODRM_MOD {
                 0x3: fsubrp();
-                default: fisub();
+                default: Inst::FISUB(Mw);
             }
             0x5: decode MODRM_MOD {
-                0x3: fsubp();
+                0x3: Inst::FSUBP(Rq);
                 default: fisubr();
             }
             0x6: decode MODRM_MOD {

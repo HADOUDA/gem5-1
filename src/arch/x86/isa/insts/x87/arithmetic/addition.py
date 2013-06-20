@@ -1,14 +1,5 @@
-# Copyright (c) 2007 The Hewlett-Packard Development Company
+# Copyright (c) 2013 Andreas Sandberg
 # All rights reserved.
-#
-# The license below extends only to copyright in the software and shall
-# not be construed as granting a license to any other intellectual
-# property including but not limited to intellectual property relating
-# to a hardware implementation of the functionality of the software
-# licensed hereunder.  You may use the software subject to the license
-# terms below provided that you ensure that this notice is replicated
-# unmodified and in its entirety in all distributions of the software,
-# modified or unmodified, in source code or in binary form.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -33,10 +24,45 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-# Authors: Gabe Black
+# Authors: Andreas Sandberg
 
 microcode = '''
-# FADD
-# FADDP
-# FIADD
+
+def macroop FADD2_R {
+    addfp sti, st(0), sti
+};
+
+
+def macroop FADD_M {
+    ldfp87 ufp1, seg, sib, disp
+    addfp st(0), st(0), ufp1
+};
+
+def macroop FADD_P {
+    rdip t7
+    ldfp87 ufp1, seg, riprel, disp
+    addfp st(0), st(0), ufp1
+};
+
+def macroop FADD_R {
+    addfp st(0), sti, st(0)
+};
+
+def macroop FADDP_R {
+    addfp sti, sti, st(0), spm=1
+};
+
+def macroop FIADD_M {
+    ld t1, seg, sib, disp
+    cvtf_i2d ufp1, t1
+    addfp st(0), st(0), ufp1
+};
+
+def macroop FIADD_P {
+    rdip t7
+    ld t1, seg, riprel, disp
+    cvtf_i2d ufp1, t1
+    addfp st(0), st(0), ufp1
+};
+
 '''
