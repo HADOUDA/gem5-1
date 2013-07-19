@@ -225,6 +225,28 @@ class Drainable
      */
     virtual void memInvalidate() {};
 
+    /**
+     * Functionally update the contents of memory buffers with new
+     * data from main memory.
+     *
+     * Functionally update any buffered data from memory or invalidate
+     * the buffer. The intention of this method is to allow some
+     * contents to be store in a buffer (e.g., a cache) when switching
+     * between a virtualized and a simulated CPU. The control script
+     * would in this case write back any dirty data (memWriteback())
+     * prior to switching to the virtualized CPU and call this method
+     * to update stale data after switching back.
+     *
+     * @warn The behavior of this method is <i>undefined</i> if the
+     * any of the data it operates on is dirty.
+     *
+     * @note It is not valid for a component to issue normal
+     * functional accesses since they can be served by caches with
+     * stale date. A valid implementation should use functional
+     * accesses on the object returned by System::getPhysMem().
+     */
+    virtual void memRefresh() { memInvalidate(); };
+
     State getDrainState() const { return _drainState; }
 
   protected:

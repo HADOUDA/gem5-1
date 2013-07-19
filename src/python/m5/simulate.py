@@ -231,6 +231,10 @@ def memInvalidate(root):
     for obj in root.descendants():
         obj.memInvalidate()
 
+def memRefresh(root):
+    for obj in root.descendants():
+        obj.memRefresh()
+
 def resume(root):
     for obj in root.descendants(): obj.drainResume()
 
