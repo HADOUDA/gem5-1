@@ -308,8 +308,10 @@ class Cache : public BaseCache
 
     void memWriteback();
     void memInvalidate();
+    void memRefresh();
     bool isDirty() const;
 
+    /** @{ */
     /**
      * Cache block visitor that writes back dirty cache blocks using
      * functional writes.
@@ -317,6 +319,7 @@ class Cache : public BaseCache
      * \return Always returns true.
      */
     bool writebackVisitor(BlkType &blk);
+
     /**
      * Cache block visitor that invalidates all blocks in the cache.
      *
@@ -324,7 +327,16 @@ class Cache : public BaseCache
      *
      * \return Always returns true.
      */
+
     bool invalidateVisitor(BlkType &blk);
+
+    /**
+     * That updates cache all blocks with contents from memory.
+     *
+     * \return Always returns true.
+     */
+    bool refreshVisitor(BlkType &blk);
+    /** @} */
 
     /**
      * Flush a cache line due to an uncacheable memory access to the

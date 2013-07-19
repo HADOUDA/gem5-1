@@ -1091,6 +1091,14 @@ Cache<TagStore>::memInvalidate()
 }
 
 template<class TagStore>
+void
+Cache<TagStore>::memRefresh()
+{
+    WrappedBlkVisitor visitor(*this, &Cache<TagStore>::refreshVisitor);
+    tags->forEachBlk(visitor);
+}
+
+template<class TagStore>
 bool
 Cache<TagStore>::isDirty() const
 {
@@ -1133,6 +1141,26 @@ Cache<TagStore>::invalidateVisitor(BlkType &blk)
         assert(!blk.isDirty());
         tags->invalidate(dynamic_cast< BlkType *>(&blk));
         blk.invalidate();
+    }
+
+    return true;
+}
+
+template<class TagStore>
+bool
+Cache<TagStore>::refreshVisitor(BlkType &blk)
+{
+    if (blk.isDirty())
+        warn_once("Refreshing dirty cache lines. Things might break.\n");
+
+    if (blk.isValid()) {
+        Request request(tags->regenerateBlkAddr(blk.tag, blk.set),
+                        blkSize, 0, Request::funcMasterId);
+        Packet packet(&request, MemCmd::ReadReq, blkSize);
+
+        packet.dataStatic(blk.data);
+        system->getPhysMem().functionalAccess(&packet);
+        assert(!packet.isError());
     }
 
     return true;
