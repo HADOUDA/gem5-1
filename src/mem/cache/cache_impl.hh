@@ -296,6 +296,7 @@ Cache<TagStore>::access(PacketPtr pkt, BlkType *&blk,
             pkt->getAddr(), blk ? "hit" : "miss", blk ? blk->print() : "");
 
     if (blk != NULL) {
+        blk->status |= BlkReferenced;
 
         if (pkt->needsExclusive() ? blk->isWritable() : blk->isReadable()) {
             // OK to satisfy access
@@ -324,7 +325,7 @@ Cache<TagStore>::access(PacketPtr pkt, BlkType *&blk,
             }
             int master_id = pkt->req->masterId();
             tags->insertBlock(pkt->getAddr(), blk, master_id);
-            blk->status = BlkValid | BlkReadable;
+            blk->status = BlkValid | BlkReadable | BlkReferenced;
         }
         std::memcpy(blk->data, pkt->getPtr<uint8_t>(), blkSize);
         blk->status |= BlkDirty;
@@ -1234,7 +1235,7 @@ Cache<TagStore>::handleFill(PacketPtr pkt, BlkType *blk,
         // don't want to lose that
     }
 
-    blk->status |= BlkValid | BlkReadable;
+    blk->status |= BlkValid | BlkReadable | BlkReferenced;
 
     if (!pkt->sharedAsserted()) {
         blk->status |= BlkWritable;
@@ -1709,6 +1710,31 @@ Cache<TagStore>::nextMSHRReadyTime() const
     }
 
     return nextReady;
+}
+
+template<class TagStore>
+double
+Cache<TagStore>::getReferenced() const
+{
+    CacheBlkFlagCounterVisitor<BlkType> visitor(BlkReferenced);
+    tags->forEachBlk(visitor);
+
+    return (double)visitor.match / (visitor.match + visitor.mismatch);
+}
+
+template <typename BlkType>
+static bool
+clear_referenced_visitor(BlkType &blk)
+{
+    blk.status &= ~BlkReferenced;
+    return true;
+}
+
+template<class TagStore>
+void
+Cache<TagStore>::clearReferenced()
+{
+    tags->forEachBlk(clear_referenced_visitor<BlkType>);
 }
 
 template<class TagStore>

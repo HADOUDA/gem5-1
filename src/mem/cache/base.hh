@@ -446,6 +446,15 @@ class BaseCache : public MemObject
      * range [0, 1].
      */
     virtual double getOccupancy() const = 0;
+    /**
+     * Return the <i>current</i> number of referenced cache lines as a
+     * fraction in the range [0, 1].
+     */
+    virtual double getReferenced() const = 0;
+    /**
+     * Clear the referenced flags from all cache lines.
+     */
+    virtual void clearReferenced() = 0;
 
   public:
     typedef BaseCacheParams Params;

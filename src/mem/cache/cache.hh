@@ -414,6 +414,8 @@ class Cache : public BaseCache
     void regStats();
 
     double getOccupancy() const { return tags->getOccupancy(); }
+    double getReferenced() const;
+    void clearReferenced();
 
     /** serialize the state of the caches
      * We currently don't support checkpointing cache state, so this panics.

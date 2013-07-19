@@ -57,6 +57,8 @@ class BaseCache(MemObject):
     def export_methods(cls, code):
         code('''
       double getOccupancy() const;
+      double getReferenced() const;
+      void clearReferenced();
 ''')
 
     assoc = Param.Int("associativity")

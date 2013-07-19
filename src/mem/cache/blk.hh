@@ -437,4 +437,32 @@ class CacheBlkIsDirtyVisitor
     bool _isDirty;
 };
 
+
+/**
+ * Cache block visitor that counts the number of blocks with any of
+ * the flags in a mask is set.
+ */
+template <typename BlkType>
+struct CacheBlkFlagCounterVisitor
+{
+    CacheBlkFlagCounterVisitor(CacheBlk::State mask)
+        : match(0), mismatch(0), _mask(mask) {}
+
+    bool operator()(BlkType &blk) {
+        if (blk.status & _mask) {
+            match++;
+        } else {
+            mismatch++;
+        }
+        return true;
+    }
+
+    Counter match;
+    Counter mismatch;
+
+
+  private:
+    CacheBlk::State _mask;
+};
+
 #endif //__CACHE_BLK_HH__
