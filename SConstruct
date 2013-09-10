@@ -1107,6 +1107,10 @@ main.SConscript('ext/gzstream/SConscript',
 main.SConscript('ext/libfdt/SConscript',
                 variant_dir = joinpath(build_root, 'libfdt'))
 
+# softfloat build is shared across all configs in the build root.
+main.SConscript('ext/softfloat/SConscript',
+                variant_dir = joinpath(build_root, 'softfloat'))
+
 ###################################################
 #
 # This function is used to set up a directory with switching headers
