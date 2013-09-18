@@ -89,8 +89,13 @@ elif buildEnv['TARGET_ISA'] == "x86":
     Simulation.setWorkCountOptions(system, options)
 else:
     fatal("incapable of building non-alpha or non-x86 full system!")
+system.cache_line_size = options.cacheline_size
 
-system.clk_domain = SrcClockDomain(clock = options.sys_clock)
+# Create a top-level voltage domain and clock domain
+system.voltage_domain = VoltageDomain(voltage = options.sys_voltage)
+
+system.clk_domain = SrcClockDomain(clock = options.sys_clock,
+                                   voltage_domain = system.voltage_domain)
 
 if options.kernel is not None:
     system.kernel = binary(options.kernel)
@@ -101,12 +106,14 @@ if options.script is not None:
 system.cpu = [CPUClass(cpu_id=i) for i in xrange(options.num_cpus)]
 
 # Create a source clock for the CPUs and set the clock period
-system.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock)
+system.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock,
+                                       voltage_domain = system.voltage_domain)
 
 Ruby.create_system(options, system, system.piobus, system._dma_ports)
 
 # Create a seperate clock domain for Ruby
-system.ruby.clk_domain = SrcClockDomain(clock = options.ruby_clock)
+system.ruby.clk_domain = SrcClockDomain(clock = options.ruby_clock,
+                                        voltage_domain = system.voltage_domain)
 
 for (i, cpu) in enumerate(system.cpu):
     #
@@ -129,7 +136,7 @@ for (i, cpu) in enumerate(system.cpu):
 # Create the appropriate memory controllers and connect them to the
 # PIO bus
 system.mem_ctrls = [TestMemClass(range = r) for r in system.mem_ranges]
-for i in xrange(len(system.physmem)):
+for i in xrange(len(system.mem_ctrls)):
     system.mem_ctrls[i].port = system.piobus.master
 
 root = Root(full_system = True, system = system)
