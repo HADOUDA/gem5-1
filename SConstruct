@@ -545,6 +545,9 @@ if main['GCC'] or main['CLANG']:
     # Add selected sanity checks from -Wextra
     main.Append(CXXFLAGS=['-Wmissing-field-initializers',
                           '-Woverloaded-virtual'])
+    # Some standard library versions require constant macros to be
+    # enabled explicitly when using C++.
+    main.Append(CCFLAGS=['-D__STDC_CONSTANT_MACROS'])
 else:
     print termcap.Yellow + termcap.Bold + 'Error' + termcap.Normal,
     print "Don't know what compiler options to use for your compiler."
