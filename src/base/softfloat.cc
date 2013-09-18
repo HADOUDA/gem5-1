@@ -39,22 +39,4 @@ SoftFloatEnv::SoftFloatEnv()
     std::memset(&status, 0, sizeof(status));
 }
 
-SoftFloat80
-SoftFloat80::load_raw(const void *_mem)
-{
-    const uint8_t *mem((const uint8_t *)_mem);
-    SoftFloat::floatx80 raw;
-    raw.fraction = *(uint64_t *)mem;
-    raw.exp = *(uint16_t *)(mem + 8);
-
-    return SoftFloat80(raw);
-}
-
-void
-SoftFloat80::store_raw(void *_mem) const
-{
-    uint8_t *mem((uint8_t *)_mem);
-
-    *(uint64_t *)mem = repr.fraction;
-    *(uint16_t *)(mem + 8) = repr.exp;
-}
+template class GenericSoftFloat<SoftFloat80Impl, SoftFloat80Impl::Repr>;

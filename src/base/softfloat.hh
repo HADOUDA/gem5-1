@@ -64,197 +64,314 @@ class SoftFloatEnv
 };
 
 /**
- * Wrapper around SoftFloat's floatx80 representation.
+ * Templatized SoftFloat wrapper that overloads common C++ operators.
  *
- * This class wraps the floatx80 implementation in SoftFloat. It
- * overloads most common floating point operators. By default, it uses
- * the global SoftFloatEnv to represent status flags and control
- * rounding modes.
+ * This class takes an implementation class, which provides a unified
+ * interface to the underlying SoftFloat library, and the underlying
+ * float representation as its template parameters. The purpose of
+ * this class is to provide a unified interface for the different
+ * software float types (32-bit, 64-bit, and 80-bit).
+ *
+ * @see SoftFloat80Impl
+ * @see SoftFloat80
  */
-class SoftFloat80
+template<class T, class R>
+class GenericSoftFloat
 {
   public:
-    SoftFloat80() {
-        repr = SoftFloat::int32_to_floatx80(0);
+    GenericSoftFloat<T, R>() {
+        repr = T::from_int32(0);
     }
 
-    SoftFloat80(const SoftFloat::floatx80 &val) {
-        repr = val;
-    }
-
-    SoftFloat80(const SoftFloat80 &val) {
+    GenericSoftFloat<T, R>(const GenericSoftFloat<T, R> &val) {
         repr = val.repr;
     }
 
-    SoftFloat80(const double val) {
-        repr = SoftFloat::float64_to_floatx80(*(const SoftFloat::float64 *)&val, status());
+    GenericSoftFloat<T, R>(const R &val) {
+        repr = val;
     }
 
-    SoftFloat80(const float val) {
-        repr = SoftFloat::float32_to_floatx80(*(const SoftFloat::float32 *)&val, status());
+    GenericSoftFloat<T, R>(const double val) {
+        repr = T::from_float64(*(const SoftFloat::float64 *)&val);
     }
 
-    SoftFloat80(const int64_t val) {
-        repr = SoftFloat::int64_to_floatx80(val);
+    GenericSoftFloat<T, R>(const float val) {
+        repr = T::from_float32(*(const SoftFloat::float32 *)&val);
     }
 
-    SoftFloat80(const int32_t val) {
-        repr = SoftFloat::int32_to_floatx80(val);
+    GenericSoftFloat<T, R>(const int64_t val) {
+        repr = T::from_int64(val);
     }
 
-    /**
-     * Load an 80-bit floating point value from memory.
-     *
-     * @param mem Pointer to an 80-bit float.
-     */
-    static SoftFloat80 load_raw(const void *mem);
-    /**
-     * Store an 80-bit floating point value to memory.
-     *
-     * @param mem Pointer to target in memory.
-     */
-    void store_raw(void *mem) const;
+    GenericSoftFloat<T, R>(const int32_t val) {
+        repr = T::from_int32(val);
+    }
+
+    static GenericSoftFloat<T, R> load(const void *mem) {
+        return T::from_mem((const uint8_t *)mem);
+    }
+
+    void store(void *mem) const {
+        T::to_mem((uint8_t *)mem, repr);
+    }
 
     operator double() const {
-	const SoftFloat::float64 val(SoftFloat::floatx80_to_float64(repr, status()));
+	const SoftFloat::float64 val(T::to_float64(repr));
         return *(const double *)&val;
     }
 
     operator float() const {
-	const SoftFloat::float32 val(SoftFloat::floatx80_to_float32(repr, status()));
-        return *(const double *)&val;
+	const SoftFloat::float32 val(T::to_float32(repr));
+        return *(const float *)&val;
     }
 
-    SoftFloat80 &operator+=(const SoftFloat80 &rhs) {
-        repr = SoftFloat::floatx80_add(repr, rhs.repr, status());
+    GenericSoftFloat<T, R> &operator+=(const GenericSoftFloat<T, R> &rhs) {
+        repr = T::add(repr, rhs.repr);
 	return *this;
     }
 
-    SoftFloat80 &operator-=(const SoftFloat80 &rhs) {
-        repr = SoftFloat::floatx80_sub(repr, rhs.repr, status());
+    GenericSoftFloat<T, R> &operator-=(const GenericSoftFloat<T, R> &rhs) {
+        repr = T::sub(repr, rhs.repr);
 	return *this;
     }
 
-    SoftFloat80 &operator*=(const SoftFloat80 &rhs) {
-        repr = SoftFloat::floatx80_mul(repr, rhs.repr, status());
+    GenericSoftFloat<T, R> &operator*=(const GenericSoftFloat<T, R> &rhs) {
+        repr = T::mul(repr, rhs.repr);
 	return *this;
     }
 
-    SoftFloat80 &operator/=(const SoftFloat80 &rhs) {
-        repr = SoftFloat::floatx80_div(repr, rhs.repr, status());
+    GenericSoftFloat<T, R> &operator/=(const GenericSoftFloat<T, R> &rhs) {
+        repr = T::div(repr, rhs.repr);
 	return *this;
     }
 
-    SoftFloat80 sqrt() const {
-        return SoftFloat::floatx80_sqrt(repr, status());
+    GenericSoftFloat<T, R> sqrt() const {
+        return T::sqrt(repr);
     }
 
     bool isNan() const {
-        return SoftFloat::floatx80_is_nan(repr);
+        return T::is_nan(repr);
     }
 
     bool isSignalingNan() const {
-        return SoftFloat::floatx80_is_signaling_nan(repr);
+        return T::is_signaling_nan(repr);
     }
 
     SoftFloat::float_class_t floatClass() const {
-        return SoftFloat::floatx80_class(repr);
+        return T::float_class(repr);
     }
 
-    static SoftFloat80 add(const SoftFloat80 &lhs, const SoftFloat80 &rhs) {
-        return SoftFloat::floatx80_add(lhs.repr, rhs.repr, status());
+    static int compare(const GenericSoftFloat<T, R> &lhs,
+                       const GenericSoftFloat<T, R> &rhs) {
+        return T::compare(lhs.repr, rhs.repr);
     }
 
-    static SoftFloat80 sub(const SoftFloat80 &lhs, const SoftFloat80 &rhs) {
-        return SoftFloat::floatx80_sub(lhs.repr, rhs.repr, status());
-    }
-
-    static SoftFloat80 mul(const SoftFloat80 &lhs, const SoftFloat80 &rhs) {
-        return SoftFloat::floatx80_mul(lhs.repr, rhs.repr, status());
-    }
-
-    static SoftFloat80 div(const SoftFloat80 &lhs, const SoftFloat80 &rhs) {
-        return SoftFloat::floatx80_div(lhs.repr, rhs.repr, status());
-    }
-
-    static int compare(const SoftFloat80 &lhs, const SoftFloat80 &rhs) {
-        return SoftFloat::floatx80_compare(lhs.repr, rhs.repr, status());
-    }
-
-    static int compare_quiet(const SoftFloat80 &lhs, const SoftFloat80 &rhs) {
-        return SoftFloat::floatx80_compare_quiet(lhs.repr, rhs.repr, status());
+    static int compare_quiet(const GenericSoftFloat<T, R> &lhs,
+                             const GenericSoftFloat<T, R> &rhs) {
+        return T::compare_quiet(lhs.repr, rhs.repr);
     }
 
   private:
-    static SoftFloat::float_status_t &status() { return SoftFloatEnv::get().status; }
-
-    SoftFloat::floatx80 repr;
+    R repr;
 };
 
-inline SoftFloat80 operator+(const SoftFloat80 &lhs, const SoftFloat80 &rhs)
+template<class T, class R>
+inline GenericSoftFloat<T, R> operator+(const GenericSoftFloat<T, R> &lhs,
+                                        const GenericSoftFloat<T, R> &rhs)
 {
-    return SoftFloat80::add(lhs, rhs);
+    return GenericSoftFloat<T, R>::add(lhs, rhs);
 }
 
-inline SoftFloat80 operator-(const SoftFloat80 &lhs, const SoftFloat80 &rhs)
+template<class T, class R>
+inline GenericSoftFloat<T, R> operator-(const GenericSoftFloat<T, R> &lhs,
+                                        const GenericSoftFloat<T, R> &rhs)
 {
-    return SoftFloat80::sub(lhs, rhs);
+    return GenericSoftFloat<T, R>::sub(lhs, rhs);
 }
 
-inline SoftFloat80 operator*(const SoftFloat80 &lhs, const SoftFloat80 &rhs)
+template<class T, class R>
+inline GenericSoftFloat<T, R> operator*(const GenericSoftFloat<T, R> &lhs,
+                                        const GenericSoftFloat<T, R> &rhs)
 {
-    return SoftFloat80::mul(lhs, rhs);
+    return GenericSoftFloat<T, R>::mul(lhs, rhs);
 }
 
-inline SoftFloat80 operator/(const SoftFloat80 &lhs, const SoftFloat80 &rhs)
+template<class T, class R>
+inline GenericSoftFloat<T, R> operator/(const GenericSoftFloat<T, R> &lhs,
+                                        const GenericSoftFloat<T, R> &rhs)
 {
-    return SoftFloat80::div(lhs, rhs);
+    return GenericSoftFloat<T, R>::div(lhs, rhs);
 }
 
-inline bool operator<=(const SoftFloat80 &lhs, const SoftFloat80 &rhs)
+template<class T, class R>
+inline bool operator<=(const GenericSoftFloat<T, R> &lhs,
+                       const GenericSoftFloat<T, R> &rhs)
 {
-    const int relation(SoftFloat80::compare_quiet(lhs, rhs));
+    const int relation(GenericSoftFloat<T, R>::compare_quiet(lhs, rhs));
     return relation == SoftFloat::float_relation_less ||
         relation == SoftFloat::float_relation_equal;
 }
 
-inline bool operator>=(const SoftFloat80 &lhs, const SoftFloat80 &rhs)
+template<class T, class R>
+inline bool operator>=(const GenericSoftFloat<T, R> &lhs,
+                       const GenericSoftFloat<T, R> &rhs)
 {
-    const int relation(SoftFloat80::compare_quiet(lhs, rhs));
+    const int relation(GenericSoftFloat<T, R>::compare_quiet(lhs, rhs));
     return relation == SoftFloat::float_relation_greater ||
         relation == SoftFloat::float_relation_equal;
 }
 
-inline bool operator<(const SoftFloat80 &lhs, const SoftFloat80 &rhs)
+template<class T, class R>
+inline bool operator<(const GenericSoftFloat<T, R> &lhs,
+                      const GenericSoftFloat<T, R> &rhs)
 {
-    const int relation(SoftFloat80::compare_quiet(lhs, rhs));
+    const int relation(GenericSoftFloat<T, R>::compare_quiet(lhs, rhs));
     return relation == SoftFloat::float_relation_less;
 }
 
-inline bool operator>(const SoftFloat80 &lhs, const SoftFloat80 &rhs)
+template<class T, class R>
+inline bool operator>(const GenericSoftFloat<T, R> &lhs,
+                      const GenericSoftFloat<T, R> &rhs)
 {
-    const int relation(SoftFloat80::compare_quiet(lhs, rhs));
+    const int relation(GenericSoftFloat<T, R>::compare_quiet(lhs, rhs));
     return relation == SoftFloat::float_relation_greater;
 }
 
-inline bool operator==(const SoftFloat80 &lhs, const SoftFloat80 &rhs)
+template<class T, class R>
+inline bool operator==(const GenericSoftFloat<T, R> &lhs,
+                       const GenericSoftFloat<T, R> &rhs)
 {
-    const int relation(SoftFloat80::compare_quiet(lhs, rhs));
+    const int relation(GenericSoftFloat<T, R>::compare_quiet(lhs, rhs));
     return relation == SoftFloat::float_relation_equal;
 }
 
-inline bool operator!=(const SoftFloat80 &lhs, const SoftFloat80 &rhs)
+template<class T, class R>
+inline bool operator!=(const GenericSoftFloat<T, R> &lhs,
+                       const GenericSoftFloat<T, R> &rhs)
 {
-    const int relation(SoftFloat80::compare_quiet(lhs, rhs));
+    const int relation(GenericSoftFloat<T, R>::compare_quiet(lhs, rhs));
     return relation != SoftFloat::float_relation_equal &&
         relation != SoftFloat::float_relation_unordered ;
 }
 
-inline std::ostream &operator<<(std::ostream &os, const SoftFloat80 &obj)
+template<class T, class R>
+inline std::ostream &operator<<(std::ostream &os,
+                                const GenericSoftFloat<T, R> &obj)
 {
     os << (double)obj;
     return os;
 }
+
+
+/**
+ * Wrapper for the SoftFloat::floatx80 type.
+ *
+ * @see GenericSoftFloat
+ */
+struct SoftFloat80Impl
+{
+    typedef SoftFloat::floatx80 Repr;
+
+    static Repr from_floatx80(const SoftFloat::floatx80 f) {
+        return f;
+    }
+
+    static Repr from_float64(const SoftFloat::float64 f) {
+        return SoftFloat::float64_to_floatx80(f, status());
+    }
+
+    static Repr from_float32(const SoftFloat::float32 f) {
+        return SoftFloat::float32_to_floatx80(f, status());
+    }
+
+    static Repr from_int64(const int64_t val) {
+        return SoftFloat::int64_to_floatx80(val);
+    }
+
+    static Repr from_int32(const int32_t val) {
+        return SoftFloat::int32_to_floatx80(val);
+    }
+
+    static Repr from_mem(const uint8_t *mem) {
+        Repr repr;
+
+        repr.fraction = *(uint64_t *)mem;
+        repr.exp = *(uint16_t *)(mem + 8);
+        
+        return repr;
+    }
+
+    static SoftFloat::floatx80 to_floatx80(const Repr repr) {
+	return repr;
+    }
+
+    static SoftFloat::float64 to_float64(const Repr repr) {
+	return SoftFloat::floatx80_to_float64(repr, status());
+    }
+
+    static SoftFloat::float32 to_float32(const Repr repr) {
+	return SoftFloat::floatx80_to_float32(repr, status());
+    }
+
+    static void to_mem(uint8_t *mem, const Repr repr) {
+        *(uint64_t *)mem = repr.fraction;
+        *(uint16_t *)(mem + 8) = repr.exp;
+    }
+
+    static Repr add(const Repr lhs, const Repr rhs) {
+        return SoftFloat::floatx80_add(lhs, rhs, status());
+    }
+
+    static Repr sub(const Repr lhs, const Repr rhs) {
+        return SoftFloat::floatx80_sub(lhs, rhs, status());
+    }
+
+    static Repr mul(const Repr lhs, const Repr rhs) {
+        return SoftFloat::floatx80_mul(lhs, rhs, status());
+    }
+
+    static Repr div(const Repr lhs, const Repr rhs) {
+        return SoftFloat::floatx80_div(lhs, rhs, status());
+    }
+
+    static Repr sqrt(const Repr val) {
+        return SoftFloat::floatx80_sqrt(val, status());
+    }
+
+    static int compare(const Repr lhs, const Repr rhs) {
+        return SoftFloat::floatx80_compare(lhs, rhs, status());
+    }
+
+    static int compare_quiet(const Repr lhs, const Repr rhs) {
+        return SoftFloat::floatx80_compare_quiet(lhs, rhs, status());
+    }
+
+    static bool is_nan(const Repr repr) {
+        return SoftFloat::floatx80_is_nan(repr);
+    }
+
+    static bool is_signaling_nan(const Repr repr) {
+        return SoftFloat::floatx80_is_signaling_nan(repr);
+    }
+
+    static SoftFloat::float_class_t float_class(const Repr repr) {
+        return SoftFloat::floatx80_class(repr);
+    }
+
+    static SoftFloat::float_status_t &status() {
+        return SoftFloatEnv::get().status;
+    }
+};
+
+/**
+ * Wrapper around SoftFloat's floatx80 representation.
+ *
+ * This class wraps the floatx80 implementation in a
+ * GenericSoftFloat. It overloads most common floating point
+ * operators. By default, it uses the global SoftFloatEnv to represent
+ * status flags and control rounding modes.
+ */
+typedef GenericSoftFloat<SoftFloat80Impl, SoftFloat80Impl::Repr> SoftFloat80;
 
 
 #endif
