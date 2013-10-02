@@ -629,5 +629,5 @@ RubySystemParams::create()
 void
 RubyDumpStatsCallback::process()
 {
-    ruby_system->printStats(*os);
+    ruby_system->printStats(*os->stream());
 }

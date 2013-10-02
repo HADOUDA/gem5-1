@@ -205,9 +205,7 @@ BaseCPU::BaseCPU(Params *p, bool is_checker)
     functionTracingEnabled = false;
     if (p->function_trace) {
         const string fname = csprintf("ftrace.%s", name());
-        functionTraceStream = simout.find(fname);
-        if (!functionTraceStream)
-            functionTraceStream = simout.create(fname);
+        functionTraceStream = simout.findOrCreate(fname)->stream();
 
         currentFunctionStart = currentFunctionEnd = 0;
         functionEntryTick = p->function_trace_start;

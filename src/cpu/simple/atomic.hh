@@ -47,6 +47,8 @@
 #include "cpu/simple/base.hh"
 #include "params/AtomicSimpleCPU.hh"
 
+class OutputStream;
+
 /**
  *  Start and end address of basic block for SimPoint profiling.
  *  This structure is used to look up the hash table of BBVs.
@@ -204,7 +206,7 @@ class AtomicSimpleCPU : public BaseSimpleCPU
     /** Excess inst count from previous interval*/
     uint64_t intervalDrift;
     /** Pointer to SimPoint BBV output stream */
-    std::ostream *simpointStream;
+    OutputStream *simpointStream;
 
     /** Basic Block information */
     struct BBInfo {

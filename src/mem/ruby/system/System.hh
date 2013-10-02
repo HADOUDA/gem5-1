@@ -170,11 +170,14 @@ operator<<(std::ostream& out, const RubySystem& obj)
 class RubyDumpStatsCallback : public Callback
 {
   private:
-    std::ostream *os;
+    OutputStream *os;
     RubySystem *ruby_system;
 
   public:
-    virtual ~RubyDumpStatsCallback() {}
+    virtual ~RubyDumpStatsCallback()
+    {
+        simout.close(os);
+    }
 
     RubyDumpStatsCallback(const std::string& _stats_filename,
                           RubySystem *system)
