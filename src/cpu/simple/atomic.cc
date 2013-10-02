@@ -642,13 +642,13 @@ AtomicSimpleCPU::profileSimPoint()
             std::sort(counts.begin(), counts.end());
 
             // Print output BBV info
-            *simpointStream << "T";
+            ostream &sp(*simpointStream->stream());
+            sp << "T";
             for (auto cnt_itr = counts.begin(); cnt_itr != counts.end();
                     ++cnt_itr) {
-                *simpointStream << ":" << cnt_itr->first
-                                << ":" << cnt_itr->second << " ";
+                sp << ":" << cnt_itr->first << ":" << cnt_itr->second << " ";
             }
-            *simpointStream << "\n";
+            sp << "\n";
 
             intervalDrift = (intervalCount + intervalDrift) - intervalSize;
             intervalCount = 0;

@@ -36,8 +36,6 @@
 #ifndef __DEV_TERMINAL_HH__
 #define __DEV_TERMINAL_HH__
 
-#include <iostream>
-
 #include "base/circlebuf.hh"
 #include "base/pollevent.hh"
 #include "base/socket.hh"
@@ -45,6 +43,7 @@
 #include "params/Terminal.hh"
 #include "sim/sim_object.hh"
 
+class OutputStream;
 class TerminalListener;
 class Uart;
 
@@ -98,7 +97,7 @@ class Terminal : public SimObject
   protected:
     CircleBuf txbuf;
     CircleBuf rxbuf;
-    std::ostream *outfile;
+    OutputStream *outfile;
 #if TRACING_ON == 1
     CircleBuf linebuf;
 #endif

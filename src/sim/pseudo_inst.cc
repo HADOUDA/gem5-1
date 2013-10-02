@@ -542,7 +542,6 @@ writefile(ThreadContext *tc, Addr vaddr, uint64_t len, uint64_t offset,
 {
     DPRINTF(PseudoInst, "PseudoInst::writefile(0x%x, 0x%x, 0x%x, 0x%x)\n",
             vaddr, len, offset, filename_addr);
-    ostream *os;
 
     // copy out target filename
     char fn[100];
@@ -550,16 +549,19 @@ writefile(ThreadContext *tc, Addr vaddr, uint64_t len, uint64_t offset,
     CopyStringOut(tc, fn, filename_addr, 100);
     filename = std::string(fn);
 
+    OutputStream *out;
     if (offset == 0) {
         // create a new file (truncate)
-        os = simout.create(filename, true);
+        out = simout.create(filename, true);
     } else {
         // do not truncate file if offset is non-zero
         // (ios::in flag is required as well to keep the existing data
         //  intact, otherwise existing data will be zeroed out.)
-        os = simout.openFile(simout.directory() + filename,
-                            ios::in | ios::out | ios::binary);
+        out = simout.open(filename,
+                          ios::in | ios::out | ios::binary);
     }
+
+    ostream *os(out->stream());
     if (!os)
         panic("could not open file %s\n", filename);
 
@@ -573,7 +575,7 @@ writefile(ThreadContext *tc, Addr vaddr, uint64_t len, uint64_t offset,
     if (os->fail() || os->bad())
         panic("Error while doing writefile!\n");
 
-    simout.close(os);
+    simout.close(out);
 
     delete [] buf;
 

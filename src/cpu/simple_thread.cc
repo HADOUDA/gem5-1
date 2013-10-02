@@ -152,9 +152,9 @@ SimpleThread::startup()
 void
 SimpleThread::dumpFuncProfile()
 {
-    std::ostream *os = simout.create(csprintf("profile.%s.dat",
-                                              baseCpu->name()));
-    profile->dump(tc, *os);
+    OutputStream *os(simout.create(csprintf("profile.%s.dat", baseCpu->name())));
+    profile->dump(tc, *os->stream());
+    simout.close(os);
 }
 
 void

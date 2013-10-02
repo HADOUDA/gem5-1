@@ -36,21 +36,112 @@
 #include <map>
 #include <string>
 
+class OutputDirectory;
+
+class OutputStream
+{
+  public:
+    virtual ~OutputStream();
+
+    /** Get the output underlying output stream */
+    std::ostream *stream() const { return _stream; };
+
+    /**
+     * Can the file be recreated if the output directory is moved?
+     *
+     * @return true if the file will be created in the new location,
+     * false otherwise.
+     */
+    virtual bool recreateable() const { return false; }
+
+    /** Get the file name in the output directory */
+    const std::string &name() const { return _name; }
+
+  protected:
+    friend class OutputDirectory;
+
+    /** Wrap an existing stream */
+    OutputStream(const std::string &name,
+                 std::ostream *stream);
+
+    /* Prevent copying */
+    OutputStream(const OutputStream &f);
+
+    /** Re-create the in a new location if recreateable. */
+    virtual void relocate(const OutputDirectory &dir);
+
+    /** Name in output directory */
+    const std::string _name;
+
+    /** Underlying output stream */
+    std::ostream *const _stream;
+};
+
+template<class StreamType>
+class OutputFile
+    : public OutputStream
+{
+  public:
+    typedef StreamType stream_type_t;
+
+    virtual ~OutputFile();
+
+    /**
+     * Can the file be recreated if the output directory is moved?
+     *
+     * @return true if the file will be created in the new location,
+     * false otherwise.
+     */
+    bool recreateable() const { return _recreateable; }
+
+  protected:
+    friend class OutputDirectory;
+
+    OutputFile(const OutputDirectory &dir,
+               const std::string &name,
+               std::ios_base::openmode mode,
+               bool recreateable);
+
+    /* Prevent copying */
+    OutputFile(const OutputFile<StreamType> &f);
+
+    /** Re-create the file in a new location if it is relocatable. */
+    void relocate(const OutputDirectory &dir);
+
+    /** File mode when opened */
+    const std::ios_base::openmode _mode;
+
+    /** Can the file be recreated in a new location? */
+    const bool _recreateable;
+
+    /** Pointer to the file stream */
+    stream_type_t *const _fstream;
+};
+
 /** Interface for creating files in a gem5 output directory. */
 class OutputDirectory
 {
   private:
     /** File names and associated stream handles */
-    typedef std::map<std::string, std::ostream *> map_t;
+    typedef std::map<std::string, OutputStream *> file_map_t;
+
+    /** Output subdirectories */
+    typedef std::map<std::string, OutputDirectory *> dir_map_t;
 
     /** Open file streams within this directory */
-    map_t files;
+    file_map_t files;
+
+    /** Output sub-directories */
+    dir_map_t dirs;
 
     /** Name of this directory */
     std::string dir;
 
     /** System-specific path separator character */
     static const char PATH_SEPARATOR = '/';
+
+    static OutputStream stdout;
+    static OutputStream stderr;
 
   protected:
     /**
@@ -61,11 +152,14 @@ class OutputDirectory
      * @return output stream for standard output or error stream if name
      *         corresponds to one or the other; NULL otherwise
      */
-    std::ostream *checkForStdio(const std::string &name) const;
+    static OutputStream *checkForStdio(const std::string &name);
 
   public:
     /** Constructor. */
     OutputDirectory();
+
+    /** Constructor. */
+    OutputDirectory(const std::string &name);
 
     /** Destructor. */
     ~OutputDirectory();
@@ -79,17 +173,6 @@ class OutputDirectory
      *          absolute file name
      */
     std::string resolve(const std::string &name) const;
-
-    /** Opens a file (optionally compressed).
-     *
-     * Will open a file as a compressed stream if filename ends in .gz.
-     *
-     * @param filename file to open
-     * @param mode attributes to open file with
-     * @return stream pointer to opened file; will cause sim fail on error
-     */
-    std::ostream *openFile(const std::string &filename,
-                        std::ios_base::openmode mode = std::ios::trunc);
 
     /**
      * Sets name of this directory.
@@ -108,35 +191,52 @@ class OutputDirectory
      *
      * Will open a file as a compressed stream if filename ends in .gz.
      *
+     * Relative output paths will result in the creation of a
+     * recreateable (see OutputFile) output file in the current output
+     * directory. Files created with an absolute path will not be
+     * recreateable.
+     *
      * @param name name of file to create (without this directory's name
      *          leading it)
      * @param binary true to create a binary file; false otherwise
-     * @return stream to the opened file
+     * @return OutputStream instance representing the created file
      */
-    std::ostream *create(const std::string &name, bool binary = false);
+    OutputStream *create(const std::string &name,
+                         bool binary = false);
 
     /**
-     * Closes a file stream.
+     * Open a file in this directory (optionally compressed).
      *
-     * Stream must have been opened through this interface, or sim will fail.
+     * Will open a file as a compressed stream if filename ends in .gz.
      *
-     * @param openStream open stream to close
+     * @param filename file to open
+     * @param mode attributes to open file with
+     * @return OutputStream instance representing the opened file
      */
-    void close(std::ostream *openStream);
+    OutputStream *open(const std::string &name,
+                       std::ios_base::openmode mode,
+                       bool recreateable = true);
 
     /**
-     * Finds stream associated with a file.
+     * Closes an output file and free the corresponding OutputFile.
+     *
+     * The output file must have been opened by the same
+     * OutputDirectory instance as the one closing it, or sim will
+     * fail.
+     *
+     * @param file OutputStream instance in this OutputDirectory.
+     */
+    void close(OutputStream *file);
+
+    /**
+     * Finds stream associated with an open file or stdout/stderr.
+     *
      * @param name of file
      * @return stream to specified file or NULL if file does not exist
      */
-    std::ostream *find(const std::string &name) const;
+    OutputStream *find(const std::string &name) const;
 
-    /**
-     * Returns true if stream is open and not standard output or error.
-     * @param os output stream to evaluate
-     * @return true if os is non-NULL and not cout or cerr
-     */
-    static bool isFile(const std::ostream *os);
+    OutputStream *findOrCreate(const std::string &name, bool binary = false);
 
     /**
      * Determines whether a file name corresponds to a file in this directory.
@@ -147,12 +247,10 @@ class OutputDirectory
     bool isFile(const std::string &name) const;
 
     /**
-     * Returns true if stream is open and not standard output or error.
-     * @param os output stream to evaluate
-     * @return true if os is non-NULL and not cout or cerr
+     * Test if a path is absolute.
      */
-    static inline bool isFile(const std::ostream &os) {
-        return isFile(&os);
+    static inline bool isAbsolute(const std::string &name) {
+        return name[0] == PATH_SEPARATOR;
     }
 
     /**
@@ -160,7 +258,7 @@ class OutputDirectory
      * @param name name of subdirectory
      * @return the new subdirectory's name suffixed with a path separator
      */
-    std::string createSubdirectory(const std::string &name) const;
+    OutputDirectory *createSubdirectory(const std::string &name);
 
     /**
      * Removes a specified file or subdirectory.

@@ -63,9 +63,7 @@ output()
 void
 setOutput(const string &filename)
 {
-    dprintf_stream = simout.find(filename);
-    if (!dprintf_stream)
-        dprintf_stream = simout.create(filename);
+    dprintf_stream = simout.findOrCreate(filename)->stream();
 }
 
 ObjectMatch ignore;
