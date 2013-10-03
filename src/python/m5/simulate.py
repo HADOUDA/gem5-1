@@ -308,4 +308,73 @@ def switchCpus(system, cpuList, do_drain=True):
     if do_drain:
         resume(system)
 
+fork_count = 0
+def fork(do_drain=True, simout="%(parent)s.f%(fork_seq)i"):
+    """Fork the simulator.
+
+    This function forks the simulator. After forking the simulator,
+    the child process gets its output files redirected to a new output
+    directory. The default name of the output directory is the same as
+    the parent with the suffix ".fN" added where N is the fork
+    sequence number. The name of the output directory can be
+    overridden using the simout keyword argument.
+
+    By default, this method drains and resumes the system. This
+    behavior can be disabled by setting the keyword argument
+    'do_drain' to false, which might be desirable if multiple
+    operations requiring a drained system are going to be performed in
+    sequence.
+
+    Output file formatting dictionary:
+      parent -- Path to the parent process's output directory.
+      fork_seq -- Fork sequence number.
+      pid -- PID of the child process.
+
+    Keyword Arguments:
+      do_drain -- Perform a drain/resume of the system when switching.
+      simout -- New simulation output directory.
+
+    Return Value:
+      pid of the child process or 0 if running in the child.
+    """
+    from m5 import options
+    global fork_count
+
+    if not internal.core.listenersDisabled():
+        raise RuntimeError, "Can not fork a simulator with listeners enabled"
+
+    root = objects.Root.getInstance()
+    if do_drain:
+        drain(root)
+
+    try:
+        pid = os.fork()
+    except OSError, e:
+        # The fork failed for some reason, we need to clean up to
+        # ensure that things are still consistent if the simulation
+        # script decides to continue anyway.
+        if do_drain:
+            resume(root)
+        raise e
+
+    if pid == 0:
+        # In child, notify objects of the fork
+        notifyFork(root)
+        # Setup a new output directory
+        parent = options.outdir
+        options.outdir = simout % {
+                "parent" : parent,
+                "fork_seq" : fork_count,
+                "pid" : os.getpid(),
+                }
+        core.setOutputDir(options.outdir)
+    else:
+        fork_count += 1
+
+    if do_drain:
+        resume(root)
+
+    return pid
+
 from internal.core import disableAllListeners
+from internal.core import listenersDisabled
