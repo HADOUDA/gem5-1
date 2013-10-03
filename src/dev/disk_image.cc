@@ -64,6 +64,17 @@ RawDiskImage::~RawDiskImage()
 { close(); }
 
 void
+RawDiskImage::notifyFork()
+{
+    if (initialized && !readonly)
+        panic("Attempting to fork system with read-write raw disk image.");
+
+    const Params *p(dynamic_cast<const Params *>(params()));
+    close();
+    open(p->image_file, p->read_only);
+}
+
+void
 RawDiskImage::open(const string &filename, bool rd_only)
 {
     if (!filename.empty()) {
@@ -197,6 +208,16 @@ CowDiskImage::~CowDiskImage()
 }
 
 void
+CowDiskImage::notifyFork()
+{
+    if (!dynamic_cast<const Params *>(params())->read_only &&
+        !filename.empty()) {
+        inform("Disabling saving of COW image in forked child process.\n");
+        filename = "";
+    }
+}
+
+void
 SafeRead(ifstream &stream, void *data, int count)
 {
     stream.read((char *)data, count);
@@ -310,8 +331,12 @@ SafeWriteSwap(ofstream &stream, const T &data)
 void
 CowDiskImage::save()
 {
-    save(filename);
-}
+    // filename will be set to the empty string to disable saving of
+    // the COW image in a forked child process. Save will still be
+    // called because there is no easy way to unregister the exit
+    // callback.
+    if (!filename.empty())
+        save(filename);}
 
 void
 CowDiskImage::save(const string &file)
