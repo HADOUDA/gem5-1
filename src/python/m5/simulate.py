@@ -195,6 +195,10 @@ def memInvalidate(root):
     for obj in root.descendants():
         obj.memInvalidate()
 
+def notifyFork(root):
+    for obj in root.descendants():
+        obj.notifyFork()
+
 def resume(root):
     for obj in root.descendants(): obj.drainResume()
 
