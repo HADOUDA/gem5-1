@@ -187,8 +187,8 @@ Kvm::createVM()
 
 KvmVM::KvmVM(KvmVMParams *params)
     : SimObject(params),
-      kvm(), system(params->system),
-      vmFD(kvm.createVM()),
+      kvm(new Kvm()), system(params->system),
+      vmFD(kvm->createVM()),
       started(false),
       nextVCPUID(0)
 {
@@ -199,7 +199,25 @@ KvmVM::KvmVM(KvmVMParams *params)
 
 KvmVM::~KvmVM()
 {
-    close(vmFD);
+    if (vmFD != -1)
+        close(vmFD);
+
+    if (kvm)
+        delete kvm;
+}
+
+void 
+KvmVM::notifyFork()
+{
+    if (vmFD != -1) {
+        if (close(vmFD) == -1)
+            warn("kvm VM: notifyFork failed to close vmFD\n");
+
+        vmFD = -1;
+
+        delete kvm;
+        kvm = NULL;
+    }
 }
 
 void

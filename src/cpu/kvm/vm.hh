@@ -224,6 +224,8 @@ class KvmVM : public SimObject
     KvmVM(KvmVMParams *params);
     virtual ~KvmVM();
 
+    void notifyFork();
+
     /**
      * Setup a shared three-page memory region used by the internals
      * of KVM. This is currently only needed by x86 implementations.
@@ -280,7 +282,7 @@ class KvmVM : public SimObject
     /** @} */
 
     /** Global KVM interface */
-    Kvm kvm;
+    Kvm *kvm;
 
   protected:
     /**
@@ -375,7 +377,7 @@ class KvmVM : public SimObject
     System *system;
 
     /** KVM VM file descriptor */
-    const int vmFD;
+    int vmFD;
 
     /** Has delayedStartup() already been called? */
     bool started;
