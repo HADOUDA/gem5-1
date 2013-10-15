@@ -91,6 +91,7 @@ class BaseKvmCPU : public BaseCPU
 
     unsigned int drain(DrainManager *dm);
     void drainResume();
+    void notifyFork();
 
     void switchOut();
     void takeOverFrom(BaseCPU *cpu);
