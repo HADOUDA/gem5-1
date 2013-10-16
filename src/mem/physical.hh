@@ -48,6 +48,52 @@
  */
 class AbstractMemory;
 
+
+class BackingStore
+{
+  public:
+    BackingStore(AddrRange range);
+    BackingStore(BackingStore &&other);
+    ~BackingStore();
+
+    BackingStore &operator=(BackingStore &&rhs);
+
+    uint8_t *get() const {
+        assert(_mem);
+        return (uint8_t *)_mem;
+    }
+
+    const AddrRange &range() const {
+        return _range;
+    }
+
+    void allocate();
+    void deallocate();
+
+    void serialize(std::ostream &os, unsigned int store_id);
+    void unserialize(Checkpoint *cp, const std::string &section);
+
+    static void setHugePageSize(size_t size);
+
+  private:
+    // Prevent copying
+    BackingStore(const BackingStore &_other);
+
+    // Prevent assignment
+    BackingStore &operator=(const BackingStore &rhs);
+
+    bool allocate(size_t size, int flags);
+    void allocate_small();
+    void allocate_huge(size_t size);
+
+    AddrRange _range;
+
+    void *_mem;
+    size_t alloc_size;
+
+    static size_t huge_page_size;
+};
+
 /**
  * The physical memory encapsulates all memories in the system and
  * provides basic functionality for accessing those memories without
@@ -86,7 +132,7 @@ class PhysicalMemory : public Serializable
 
     // The physical memory used to provide the memory in the simulated
     // system
-    std::vector<std::pair<AddrRange, uint8_t*> > backingStore;
+    std::vector< BackingStore > backingStore;
 
     // Prevent copying
     PhysicalMemory(const PhysicalMemory&);
@@ -162,7 +208,7 @@ class PhysicalMemory : public Serializable
      *
      * @return Pointers to the memory backing store
      */
-    std::vector<std::pair<AddrRange, uint8_t*> > getBackingStore() const
+    const std::vector< BackingStore > &getBackingStores() const
     { return backingStore; }
 
     /**
@@ -195,27 +241,11 @@ class PhysicalMemory : public Serializable
     void serialize(std::ostream& os);
 
     /**
-     * Serialize a specific store.
-     *
-     * @param store_id Unique identifier of this backing store
-     * @param range The address range of this backing store
-     * @param pmem The host pointer to this backing store
-     */
-    void serializeStore(std::ostream& os, unsigned int store_id,
-                        AddrRange range, uint8_t* pmem);
-
-    /**
      * Unserialize the memories in the system. As with the
      * serialization, this action is independent of how the address
      * ranges are mapped to logical memories in the guest system.
      */
     void unserialize(Checkpoint* cp, const std::string& section);
-
-    /**
-     * Unserialize a specific backing store, identified by a section.
-     */
-    void unserializeStore(Checkpoint* cp, const std::string& section);
-
 };
 
 #endif //__PHYSICAL_MEMORY_HH__

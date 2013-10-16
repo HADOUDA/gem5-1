@@ -49,6 +49,7 @@
 #include <cstdio>
 #include <iostream>
 #include <string>
+#include <utility>
 
 #include "base/trace.hh"
 #include "debug/BusAddrRanges.hh"
@@ -57,6 +58,241 @@
 #include "mem/physical.hh"
 
 using namespace std;
+
+size_t BackingStore::huge_page_size = 0;
+
+BackingStore::BackingStore(AddrRange range)
+    : _range(range),
+      _mem(NULL),
+      alloc_size(NULL)
+{
+}
+
+BackingStore::BackingStore(BackingStore &&other)
+    : _range(other._range),
+      _mem(other._mem),
+      alloc_size(other.alloc_size)
+{
+    other._mem = NULL;
+    other.alloc_size = NULL;
+}
+
+BackingStore::~BackingStore()
+{
+    if (_mem)
+        deallocate();
+}
+
+BackingStore &
+BackingStore::operator=(BackingStore &&rhs)
+{
+    if (_mem)
+        deallocate();
+
+    _mem = std::move(rhs._mem);
+    _range = std::move(rhs._range);
+    alloc_size = std::move(rhs.alloc_size);
+
+    rhs._mem = NULL;
+    rhs.alloc_size = NULL;
+
+    return *this;
+}
+
+void
+BackingStore::allocate()
+{
+    if (huge_page_size)
+        allocate_huge(huge_page_size);
+    else
+        allocate_small();
+}
+
+void
+BackingStore::allocate_small()
+{
+    if (!allocate(_range.size(), MAP_ANON | MAP_PRIVATE)) {
+        perror("mmap");
+        fatal("Could not mmap %d bytes for range %s!\n", _range.size(),
+              _range.to_string());
+    }
+}
+
+void
+BackingStore::allocate_huge(size_t huge_size)
+{
+    size_t size(_range.size());
+    size_t pages((size / huge_size) + (size % huge_size ? 1 : 0));
+
+    DPRINTF(BusAddrRanges, "Trying to allocate %s bytes using huge pages (%i)\n",
+            _range.size(), huge_size);
+
+    if (!allocate(pages * huge_size, MAP_ANON | MAP_PRIVATE | MAP_HUGETLB)) {
+        perror("mmap");
+        warn("Failed to allocate huge pages for range %s. Falling back to "
+             "normal pages.",
+             _range.to_string());
+
+        allocate_small();
+    }
+}
+
+bool
+BackingStore::allocate(size_t size, int flags)
+{
+    if (_mem)
+        panic("Trying to re-allocate backing store without deallocate\n");
+
+    alloc_size = size;
+    _mem = mmap(NULL, size, PROT_READ | PROT_WRITE, flags, -1, 0);
+
+    if (_mem == MAP_FAILED)
+        return false;
+    else
+        return true;
+}
+
+void
+BackingStore::deallocate()
+{
+    if (!_mem)
+        panic("Trying to de-allocate backing store without allocation\n");
+
+    if (munmap(_mem, alloc_size) == -1) {
+        perror("munmap");
+        warn("munmap for range %s failed, continuing anyway.\n",
+             _range.to_string());
+    }
+
+    _mem = NULL;
+    alloc_size = 0;
+}
+
+void
+BackingStore::serialize(ostream& os, unsigned int store_id)
+{
+    // we cannot use the address range for the name as the
+    // memories that are not part of the address map can overlap
+    const string filename(name() + ".store" + to_string(store_id) + ".pmem");
+    const long range_size(_range.size());
+
+    if (!_mem) {
+        panic("Can't serialize backing store for range %s, "
+              "store not allocated.\n",
+              _range.to_string());
+    }
+
+    DPRINTF(Checkpoint, "Serializing physical memory %s with size %d\n",
+            filename, range_size);
+
+    SERIALIZE_SCALAR(filename);
+    SERIALIZE_SCALAR(range_size);
+
+    // write memory file
+    string filepath = Checkpoint::dir() + "/" + filename.c_str();
+    int fd = creat(filepath.c_str(), 0664);
+    if (fd < 0) {
+        perror("creat");
+        fatal("Can't open physical memory checkpoint file '%s'\n",
+              filename);
+    }
+
+    gzFile compressed_mem = gzdopen(fd, "wb");
+    if (compressed_mem == NULL)
+        fatal("Insufficient memory to allocate compression state for %s\n",
+              filename);
+
+    uint64_t pass_size = 0;
+
+    // gzwrite fails if (int)len < 0 (gzwrite returns int)
+    for (uint64_t written = 0; written < range_size; written += pass_size) {
+        pass_size = (uint64_t)INT_MAX < (range_size - written) ?
+            (uint64_t)INT_MAX : (range_size - written);
+
+        if (gzwrite(compressed_mem, (uint8_t *)_mem + written,
+                    (unsigned int) pass_size) != (int) pass_size) {
+            fatal("Write failed on physical memory checkpoint file '%s'\n",
+                  filename);
+        }
+    }
+
+    // close the compressed stream and check that the exit status
+    // is zero
+    if (gzclose(compressed_mem))
+        fatal("Close failed on physical memory checkpoint file '%s'\n",
+              filename);
+
+}
+
+void
+BackingStore::unserialize(Checkpoint* cp, const string& section)
+{
+    const uint32_t chunk_size = 16384;
+
+    string filename;
+    UNSERIALIZE_SCALAR(filename);
+    string filepath = cp->cptDir + "/" + filename;
+
+    // mmap memoryfile
+    int fd = open(filepath.c_str(), O_RDONLY);
+    if (fd < 0) {
+        perror("open");
+        fatal("Can't open physical memory checkpoint file '%s'", filename);
+    }
+
+    gzFile compressed_mem = gzdopen(fd, "rb");
+    if (compressed_mem == NULL)
+        fatal("Insufficient memory to allocate compression state for %s\n",
+              filename);
+
+    long range_size;
+    UNSERIALIZE_SCALAR(range_size);
+
+    DPRINTF(Checkpoint, "Unserializing physical memory %s with size %d\n",
+            filename, range_size);
+
+    if (range_size != _range.size())
+        fatal("Memory range size has changed! Saw %lld, expected %lld\n",
+              range_size, _range.size());
+
+    uint64_t curr_size = 0;
+    long* temp_page = new long[chunk_size];
+    long* pmem_current;
+    uint32_t bytes_read;
+    while (curr_size < _range.size()) {
+        bytes_read = gzread(compressed_mem, temp_page, chunk_size);
+        if (bytes_read == 0)
+            break;
+
+        assert(bytes_read % sizeof(long) == 0);
+
+        for (uint32_t x = 0; x < bytes_read / sizeof(long); x++) {
+            // Only copy bytes that are non-zero, so we don't give
+            // the VM system hell
+            if (*(temp_page + x) != 0) {
+                pmem_current = (long*)((uint8_t*)_mem +
+                                       curr_size + x * sizeof(long));
+                *pmem_current = *(temp_page + x);
+            }
+        }
+        curr_size += bytes_read;
+    }
+
+    delete[] temp_page;
+
+    if (gzclose(compressed_mem))
+        fatal("Close failed on physical memory checkpoint file '%s'\n",
+              filename);
+}
+
+void
+BackingStore::setHugePageSize(size_t size)
+{
+    if (huge_page_size)
+        fatal("Huge page size already set.\n");
+
+    huge_page_size = size;
+}
 
 PhysicalMemory::PhysicalMemory(const string& _name,
                                const vector<AbstractMemory*>& _memories) :
@@ -147,20 +383,12 @@ PhysicalMemory::createBackingStore(AddrRange range,
     // perform the actual mmap
     DPRINTF(BusAddrRanges, "Creating backing store for range %s with size %d\n",
             range.to_string(), range.size());
-    int map_flags = MAP_ANON | MAP_PRIVATE;
-    uint8_t* pmem = (uint8_t*) mmap(NULL, range.size(),
-                                    PROT_READ | PROT_WRITE,
-                                    map_flags, -1, 0);
 
-    if (pmem == (uint8_t*) MAP_FAILED) {
-        perror("mmap");
-        fatal("Could not mmap %d bytes for range %s!\n", range.size(),
-              range.to_string());
-    }
-
-    // remember this backing store so we can checkpoint it and unmap
-    // it appropriately
-    backingStore.push_back(make_pair(range, pmem));
+    // Create a backing store and add it to the list of backing stores
+    // so we can checkpoint it and unmap it appropriately
+    backingStore.push_back(BackingStore(range));
+    BackingStore &bs(*backingStore.rbegin());
+    bs.allocate();
 
     // point the memories to their backing store, and if requested,
     // initialize the memory range to 0
@@ -168,16 +396,12 @@ PhysicalMemory::createBackingStore(AddrRange range,
          m != _memories.end(); ++m) {
         DPRINTF(BusAddrRanges, "Mapping memory %s to backing store\n",
                 (*m)->name());
-        (*m)->setBackingStore(pmem);
+        (*m)->setBackingStore(bs.get());
     }
 }
 
 PhysicalMemory::~PhysicalMemory()
 {
-    // unmap the backing store
-    for (vector<pair<AddrRange, uint8_t*> >::iterator s = backingStore.begin();
-         s != backingStore.end(); ++s)
-        munmap((char*)s->second, s->first.size());
 }
 
 bool
@@ -284,64 +508,11 @@ PhysicalMemory::serialize(ostream& os)
 
     unsigned int store_id = 0;
     // store each backing store memory segment in a file
-    for (vector<pair<AddrRange, uint8_t*> >::iterator s = backingStore.begin();
+    for (vector< BackingStore >::iterator s = backingStore.begin();
          s != backingStore.end(); ++s) {
-        nameOut(os, csprintf("%s.store%d", name(), store_id));
-        serializeStore(os, store_id++, s->first, s->second);
+        nameOut(os, csprintf("%s.store%d", name(), store_id++));
+        s->serialize(os, store_id++);
     }
-}
-
-void
-PhysicalMemory::serializeStore(ostream& os, unsigned int store_id,
-                               AddrRange range, uint8_t* pmem)
-{
-    // we cannot use the address range for the name as the
-    // memories that are not part of the address map can overlap
-    string filename = name() + ".store" + to_string(store_id) + ".pmem";
-    long range_size = range.size();
-
-    DPRINTF(Checkpoint, "Serializing physical memory %s with size %d\n",
-            filename, range_size);
-
-    SERIALIZE_SCALAR(store_id);
-    SERIALIZE_SCALAR(filename);
-    SERIALIZE_SCALAR(range_size);
-
-    // write memory file
-    string filepath = Checkpoint::dir() + "/" + filename.c_str();
-    int fd = creat(filepath.c_str(), 0664);
-    if (fd < 0) {
-        perror("creat");
-        fatal("Can't open physical memory checkpoint file '%s'\n",
-              filename);
-    }
-
-    gzFile compressed_mem = gzdopen(fd, "wb");
-    if (compressed_mem == NULL)
-        fatal("Insufficient memory to allocate compression state for %s\n",
-              filename);
-
-    uint64_t pass_size = 0;
-
-    // gzwrite fails if (int)len < 0 (gzwrite returns int)
-    for (uint64_t written = 0; written < range.size();
-         written += pass_size) {
-        pass_size = (uint64_t)INT_MAX < (range.size() - written) ?
-            (uint64_t)INT_MAX : (range.size() - written);
-
-        if (gzwrite(compressed_mem, pmem + written,
-                    (unsigned int) pass_size) != (int) pass_size) {
-            fatal("Write failed on physical memory checkpoint file '%s'\n",
-                  filename);
-        }
-    }
-
-    // close the compressed stream and check that the exit status
-    // is zero
-    if (gzclose(compressed_mem))
-        fatal("Close failed on physical memory checkpoint file '%s'\n",
-              filename);
-
 }
 
 void
@@ -364,86 +535,8 @@ PhysicalMemory::unserialize(Checkpoint* cp, const string& section)
     UNSERIALIZE_SCALAR(nbr_of_stores);
 
     for (unsigned int i = 0; i < nbr_of_stores; ++i) {
-        unserializeStore(cp, csprintf("%s.store%d", section, i));
+        backingStore[i].unserialize(
+            cp, csprintf("%s.store%d", section, i));
     }
 
-}
-
-void
-PhysicalMemory::unserializeStore(Checkpoint* cp, const string& section)
-{
-    const uint32_t chunk_size = 16384;
-
-    unsigned int store_id;
-    UNSERIALIZE_SCALAR(store_id);
-
-    string filename;
-    UNSERIALIZE_SCALAR(filename);
-    string filepath = cp->cptDir + "/" + filename;
-
-    // mmap memoryfile
-    int fd = open(filepath.c_str(), O_RDONLY);
-    if (fd < 0) {
-        perror("open");
-        fatal("Can't open physical memory checkpoint file '%s'", filename);
-    }
-
-    gzFile compressed_mem = gzdopen(fd, "rb");
-    if (compressed_mem == NULL)
-        fatal("Insufficient memory to allocate compression state for %s\n",
-              filename);
-
-    uint8_t* pmem = backingStore[store_id].second;
-    AddrRange range = backingStore[store_id].first;
-
-    // unmap file that was mmapped in the constructor, this is
-    // done here to make sure that gzip and open don't muck with
-    // our nice large space of memory before we reallocate it
-    munmap((char*) pmem, range.size());
-
-    long range_size;
-    UNSERIALIZE_SCALAR(range_size);
-
-    DPRINTF(Checkpoint, "Unserializing physical memory %s with size %d\n",
-            filename, range_size);
-
-    if (range_size != range.size())
-        fatal("Memory range size has changed! Saw %lld, expected %lld\n",
-              range_size, range.size());
-
-    pmem = (uint8_t*) mmap(NULL, range.size(), PROT_READ | PROT_WRITE,
-                           MAP_ANON | MAP_PRIVATE, -1, 0);
-
-    if (pmem == (void*) MAP_FAILED) {
-        perror("mmap");
-        fatal("Could not mmap physical memory!\n");
-    }
-
-    uint64_t curr_size = 0;
-    long* temp_page = new long[chunk_size];
-    long* pmem_current;
-    uint32_t bytes_read;
-    while (curr_size < range.size()) {
-        bytes_read = gzread(compressed_mem, temp_page, chunk_size);
-        if (bytes_read == 0)
-            break;
-
-        assert(bytes_read % sizeof(long) == 0);
-
-        for (uint32_t x = 0; x < bytes_read / sizeof(long); x++) {
-            // Only copy bytes that are non-zero, so we don't give
-            // the VM system hell
-            if (*(temp_page + x) != 0) {
-                pmem_current = (long*)(pmem + curr_size + x * sizeof(long));
-                *pmem_current = *(temp_page + x);
-            }
-        }
-        curr_size += bytes_read;
-    }
-
-    delete[] temp_page;
-
-    if (gzclose(compressed_mem))
-        fatal("Close failed on physical memory checkpoint file '%s'\n",
-              filename);
 }

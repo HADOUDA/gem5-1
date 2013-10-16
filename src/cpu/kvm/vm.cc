@@ -311,13 +311,13 @@ KvmVM::cpuStartup()
 void
 KvmVM::delayedStartup()
 {
-    const std::vector<std::pair<AddrRange, uint8_t*> >&memories(
-        system->getPhysMem().getBackingStore());
+    const std::vector< BackingStore >&memories(
+        system->getPhysMem().getBackingStores());
 
     DPRINTF(Kvm, "Mapping %i memory region(s)\n", memories.size());
     for (int slot(0); slot < memories.size(); ++slot) {
-        const AddrRange &range(memories[slot].first);
-        void *pmem(memories[slot].second);
+        const AddrRange &range(memories[slot].range());
+        void *pmem(memories[slot].get());
 
         if (pmem) {
             DPRINTF(Kvm, "Mapping region: 0x%p -> 0x%llx [size: 0x%llx]\n",

@@ -31,6 +31,7 @@ import datetime
 import os
 import socket
 import sys
+import re
 
 __all__ = [ 'options', 'arguments', 'main' ]
 
@@ -112,6 +113,10 @@ def parse_options():
     option("--trace-ignore", metavar="EXPR", action='append', split=':',
         help="Ignore EXPR sim objects")
 
+    # Optimizations
+    option('--no-huge-pages', action="store_true", default=False,
+           help="Disable huge page support.")
+
     # Help options
     group("Help Options")
     option("--list-sim-objects", action='store_true', default=False,
@@ -126,6 +131,28 @@ def parse_options():
 
     arguments = options.parse_args()
     return options,arguments
+
+def supported_hugepage_sizes():
+    from util.convert import toMemorySize
+    re_hugepage = re.compile("^hugepages-([0-9]+.B)$")
+
+    sizes = []
+    for d in os.listdir('/sys/kernel/mm/hugepages'):
+        m = re_hugepage.match(d)
+        if m:
+            sizes.append((toMemorySize(m.group(1)), m.group(1)))
+
+    sizes.sort(key=lambda x: x[0])
+    return sizes
+
+def setup_huge_pages():
+    from m5.internal.core import setHugePageSize
+    sizes = supported_hugepage_sizes()
+    if not sizes:
+        return
+
+    print "Enabling support for %s huge pages." % sizes[0][1]
+    setHugePageSize(sizes[0][0]);
 
 def interact(scope):
     banner = "gem5 Interactive Console"
@@ -312,6 +339,10 @@ def main(*args):
 
     # set stats options
     stats.initText(options.stats_file)
+
+    # Setup huge pages
+    if not options.no_huge_pages:
+        setup_huge_pages()
 
     # set debugging options
     debug.setRemoteGDBPort(options.remote_gdb_port)

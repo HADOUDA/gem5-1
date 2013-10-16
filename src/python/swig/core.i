@@ -37,6 +37,7 @@
 #include "base/socket.hh"
 #include "base/types.hh"
 #include "python/swig/pyobject.hh"
+#include "mem/physical.hh"
 #include "sim/core.hh"
 
 extern const char *compileDate;
@@ -53,12 +54,20 @@ const bool flag_NDEBUG = false;
 #endif
 const bool flag_TRACING_ON = TRACING_ON;
 
+extern size_t huge_page_size;
+
 inline void disableAllListeners() { ListenSocket::disableAll(); }
 
 inline void
 seedRandom(uint64_t seed)
 {
     random_mt.init(seed);
+}
+
+inline void
+setHugePageSize(size_t size)
+{
+    BackingStore::setHugePageSize(size);
 }
 
 %}
@@ -72,6 +81,7 @@ void setOutputDir(const std::string &dir);
 void doExitCleanup();
 void disableAllListeners();
 void seedRandom(uint64_t seed);
+void setHugePageSize(size_t size);
 
 %immutable compileDate;
 char *compileDate;
