@@ -138,13 +138,22 @@ BackingStore::allocate_small()
         // Tell the kernel to use THP if that has been requested by
         // the user.
         if (madvise(_mem, alloc_size, MADV_HUGEPAGE) == -1) {
-            perror("madvise");
-            warn("Failed to set MADV_HUGEPAGE for range %s.\n",
-                 _range.to_string());
+            if (errno == EINVAL) {
+                inform("Can't enable Transparent Huge Pages. THP is not "
+                       "supported by the host kernel.\n");
+            } else {
+                perror("madvise");
+                warn("Failed to set MADV_HUGEPAGE for range %s.\n",
+                     _range.to_string());
+            }
         }
     } else {
-        // The user doesn't want THP, tell the kernel to disable it.
-        if (madvise(_mem, alloc_size, MADV_NOHUGEPAGE) == -1) {
+        // The user doesn't want THP, tell the kernel to disable
+        // it. We don't want to alarm the user if THP isn't supported
+        // by the host kernel (errno == EINVAL) since it obviously
+        // won't be enabled in that case.
+        if (madvise(_mem, alloc_size, MADV_NOHUGEPAGE) == -1 &&
+            errno != EINVAL) {
             perror("madvise");
             warn("Failed to set MADV_NOHUGEPAGE for range %s.\n",
                  _range.to_string());
