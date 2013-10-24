@@ -70,6 +70,12 @@ setHugePageSize(size_t size)
     BackingStore::setHugePageSize(size);
 }
 
+inline void
+disableTransparentHugePages()
+{
+    BackingStore::enable_transparent_huge_pages = false;
+}
+
 %}
 
 %include <std_string.i>
@@ -82,6 +88,7 @@ void doExitCleanup();
 void disableAllListeners();
 void seedRandom(uint64_t seed);
 void setHugePageSize(size_t size);
+void disableTransparentHugePages();
 
 %immutable compileDate;
 char *compileDate;

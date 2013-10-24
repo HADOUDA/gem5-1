@@ -75,6 +75,7 @@ class BackingStore
     void unserialize(Checkpoint *cp, const std::string &section);
 
     static void setHugePageSize(size_t size);
+    static bool enable_transparent_huge_pages;
 
   private:
     // Prevent copying

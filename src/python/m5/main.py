@@ -114,8 +114,10 @@ def parse_options():
         help="Ignore EXPR sim objects")
 
     # Optimizations
-    option('--no-huge-pages', action="store_true", default=False,
-           help="Disable huge page support.")
+    option('--allocate-huge-pages', action="store_true", default=False,
+           help="Allocate huge pages instead of small pages.")
+    option('--no-transparent-huge-pages', action="store_true", default=False,
+           help="Disable transparent huge page allocation.")
 
     # Help options
     group("Help Options")
@@ -341,8 +343,13 @@ def main(*args):
     stats.initText(options.stats_file)
 
     # Setup huge pages
-    if not options.no_huge_pages:
+    if options.no_transparent_huge_pages:
+        from m5.internal.core import disableTransparentHugePages
+        disableTransparentHugePages()
+
+    if options.allocate_huge_pages:
         setup_huge_pages()
+        
 
     # set debugging options
     debug.setRemoteGDBPort(options.remote_gdb_port)

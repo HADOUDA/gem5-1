@@ -60,6 +60,7 @@
 using namespace std;
 
 size_t BackingStore::huge_page_size = 0;
+bool BackingStore::enable_transparent_huge_pages = true;
 
 BackingStore::BackingStore(AddrRange range,
                            const std::vector<AbstractMemory *> &_memories)
@@ -131,6 +132,25 @@ BackingStore::allocate_small()
         fatal("Could not mmap %d bytes for range %s!\n", _range.size(),
               _range.to_string());
     }
+
+#ifdef MADV_HUGEPAGE
+    if (enable_transparent_huge_pages) {
+        // Tell the kernel to use THP if that has been requested by
+        // the user.
+        if (madvise(_mem, alloc_size, MADV_HUGEPAGE) == -1) {
+            perror("madvise");
+            warn("Failed to set MADV_HUGEPAGE for range %s.\n",
+                 _range.to_string());
+        }
+    } else {
+        // The user doesn't want THP, tell the kernel to disable it.
+        if (madvise(_mem, alloc_size, MADV_NOHUGEPAGE) == -1) {
+            perror("madvise");
+            warn("Failed to set MADV_NOHUGEPAGE for range %s.\n",
+                 _range.to_string());
+        }
+    }
+#endif
 }
 
 void
