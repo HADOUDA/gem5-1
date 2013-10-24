@@ -146,10 +146,12 @@ BackingStore::allocate(size_t size, int flags)
     alloc_size = size;
     _mem = mmap(NULL, size, PROT_READ | PROT_WRITE, flags, -1, 0);
 
-    if (_mem == MAP_FAILED)
+    if (_mem == MAP_FAILED) {
+        _mem = NULL;
         return false;
-    else
+    } else {
         return true;
+    }
 }
 
 void
