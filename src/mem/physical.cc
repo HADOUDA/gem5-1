@@ -61,20 +61,24 @@ using namespace std;
 
 size_t BackingStore::huge_page_size = 0;
 
-BackingStore::BackingStore(AddrRange range)
+BackingStore::BackingStore(AddrRange range,
+                           const std::vector<AbstractMemory *> &_memories)
     : _range(range),
       _mem(NULL),
-      alloc_size(NULL)
+      alloc_size(NULL),
+      memories(_memories)
 {
 }
 
 BackingStore::BackingStore(BackingStore &&other)
     : _range(other._range),
       _mem(other._mem),
-      alloc_size(other.alloc_size)
+      alloc_size(other.alloc_size),
+      memories(other.memories)
 {
     other._mem = NULL;
     other.alloc_size = NULL;
+    other.memories.clear();
 }
 
 BackingStore::~BackingStore()
@@ -92,9 +96,11 @@ BackingStore::operator=(BackingStore &&rhs)
     _mem = std::move(rhs._mem);
     _range = std::move(rhs._range);
     alloc_size = std::move(rhs.alloc_size);
+    memories = std::move(rhs.memories);
 
     rhs._mem = NULL;
     rhs.alloc_size = NULL;
+    rhs.memories.clear();
 
     return *this;
 }
@@ -106,6 +112,15 @@ BackingStore::allocate()
         allocate_huge(huge_page_size);
     else
         allocate_small();
+
+    // point the memories to their backing store, and if requested,
+    // initialize the memory range to 0
+    for (vector<AbstractMemory*>::const_iterator m = memories.begin();
+         m != memories.end(); ++m) {
+        DPRINTF(BusAddrRanges, "Mapping memory %s to backing store\n",
+                (*m)->name());
+        (*m)->setBackingStore((uint8_t *)_mem);
+    }
 }
 
 void
@@ -257,6 +272,12 @@ BackingStore::unserialize(Checkpoint* cp, const string& section)
         fatal("Memory range size has changed! Saw %lld, expected %lld\n",
               range_size, _range.size());
 
+    // Re-allocate the backing store to get fresh memory. This eases
+    // the pressure on the kernel VM since we only write to non-zero
+    // pages when loading the checkpoint.
+    deallocate();
+    allocate();
+
     uint64_t curr_size = 0;
     long* temp_page = new long[chunk_size];
     long* pmem_current;
@@ -388,18 +409,9 @@ PhysicalMemory::createBackingStore(AddrRange range,
 
     // Create a backing store and add it to the list of backing stores
     // so we can checkpoint it and unmap it appropriately
-    backingStore.push_back(BackingStore(range));
+    backingStore.push_back(BackingStore(range, _memories));
     BackingStore &bs(*backingStore.rbegin());
     bs.allocate();
-
-    // point the memories to their backing store, and if requested,
-    // initialize the memory range to 0
-    for (vector<AbstractMemory*>::const_iterator m = _memories.begin();
-         m != _memories.end(); ++m) {
-        DPRINTF(BusAddrRanges, "Mapping memory %s to backing store\n",
-                (*m)->name());
-        (*m)->setBackingStore(bs.get());
-    }
 }
 
 PhysicalMemory::~PhysicalMemory()

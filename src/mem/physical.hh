@@ -52,7 +52,8 @@ class AbstractMemory;
 class BackingStore
 {
   public:
-    BackingStore(AddrRange range);
+    BackingStore(AddrRange range,
+                 const std::vector<AbstractMemory *> &memories);
     BackingStore(BackingStore &&other);
     ~BackingStore();
 
@@ -90,6 +91,7 @@ class BackingStore
 
     void *_mem;
     size_t alloc_size;
+    std::vector<AbstractMemory *> memories;
 
     static size_t huge_page_size;
 };
