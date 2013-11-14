@@ -46,6 +46,7 @@
 
 #include "arch/x86/regs/segment.hh"
 #include "arch/x86/pagetable.hh"
+#include "base/statistics.hh"
 #include "base/trie.hh"
 #include "mem/mem_object.hh"
 #include "mem/request.hh"
@@ -69,15 +70,22 @@ namespace X86ISA
         typedef std::list<TlbEntry *> EntryList;
 
         uint32_t configAddress;
+        bool hackHitOnCold;
+
+        /** Number of cold misses transformed into hits */
+        Stats::Scalar hiddenColdMisses;
 
       public:
 
         typedef X86TLBParams Params;
         TLB(const Params *p);
 
+        void regStats();
+
         TlbEntry *lookup(Addr va, bool update_lru = true);
 
         void setConfigAddress(uint32_t addr);
+        void setHackHitOnCold(bool enabled);
 
       protected:
 

@@ -61,8 +61,12 @@
 
 namespace X86ISA {
 
-TLB::TLB(const Params *p) : BaseTLB(p), configAddress(0), size(p->size),
-    lruSeq(0)
+TLB::TLB(const Params *p)
+    : BaseTLB(p),
+      configAddress(0),
+      hackHitOnCold(false),
+      size(p->size),
+      lruSeq(0)
 {
     if (!size)
         fatal("TLBs must have a non-zero size.\n");
@@ -76,6 +80,19 @@ TLB::TLB(const Params *p) : BaseTLB(p), configAddress(0), size(p->size),
 
     walker = p->walker;
     walker->setTLB(this);
+}
+
+void
+TLB::regStats()
+{
+    using namespace Stats;
+
+    BaseTLB::regStats();
+
+    hiddenColdMisses
+        .name(name() + ".hidden_cold_misses")
+        .desc("Number of cold misses treated as hits.")
+        ;
 }
 
 void
@@ -147,6 +164,13 @@ TLB::setConfigAddress(uint32_t addr)
 {
     configAddress = addr;
 }
+
+void
+TLB::setHackHitOnCold(bool enabled)
+{
+    hackHitOnCold = enabled;
+}
+
 
 void
 TLB::flushNonGlobal()
@@ -335,6 +359,12 @@ TLB::translate(RequestPtr req, ThreadContext *tc, Translation *translation,
             DPRINTF(TLB, "Paging enabled.\n");
             // The vaddr already has the segment base applied.
             TlbEntry *entry = lookup(vaddr);
+            if (!entry && FullSystem && hackHitOnCold && !freeList.empty()) {
+                // Need to do a functional page walk to hide the miss
+                walker->startFunctionalInstall(tc, vaddr);
+                ++hiddenColdMisses;
+            }
+
             if (!entry) {
                 if (FullSystem) {
                     Fault fault = walker->start(tc, translation, req, mode);

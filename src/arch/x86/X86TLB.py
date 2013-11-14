@@ -54,6 +54,17 @@ class X86TLB(BaseTLB):
     type = 'X86TLB'
     cxx_class = 'X86ISA::TLB'
     cxx_header = 'arch/x86/tlb.hh'
+
+    @classmethod
+    def export_method_cxx_predecls(cls, code):
+        code('#include "arch/x86/tlb.hh"')
+
+    @classmethod
+    def export_methods(cls, code):
+        code('''
+      void setHackHitOnCold(bool enabled);
+''')
+
     size = Param.Unsigned(64, "TLB size")
     walker = Param.X86PagetableWalker(\
             X86PagetableWalker(), "page table walker")

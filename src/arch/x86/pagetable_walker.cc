@@ -113,6 +113,14 @@ Walker::startFunctional(ThreadContext * _tc, Addr &addr, unsigned &logBytes,
     return funcState.startFunctional(addr, logBytes);
 }
 
+Fault
+Walker::startFunctionalInstall(ThreadContext * _tc, Addr addr)
+{
+    unsigned logBytes;
+    funcState.initState(_tc, BaseTLB::Read);
+    return funcState.startFunctional(addr, logBytes, false);
+}
+
 bool
 Walker::WalkerPort::recvTimingResp(PacketPtr pkt)
 {
@@ -249,11 +257,13 @@ Walker::WalkerState::startWalk()
 }
 
 Fault
-Walker::WalkerState::startFunctional(Addr &addr, unsigned &logBytes)
+Walker::WalkerState::startFunctional(Addr &addr, unsigned &logBytes,
+                                     bool _noTlbInstall)
 {
     Fault fault = NoFault;
     assert(started == false);
     started = true;
+    noTlbInstall = _noTlbInstall;
     setupWalk(addr);
 
     do {
@@ -507,7 +517,7 @@ Walker::WalkerState::stepWalk(PacketPtr &write)
     }
     if (doEndWalk) {
         if (doTLBInsert)
-            if (!functional)
+            if (!noTlbInstall)
                 walker->tlb->insert(entry.vaddr, entry);
         endWalk();
     } else {
