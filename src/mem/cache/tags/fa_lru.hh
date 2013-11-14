@@ -189,6 +189,8 @@ public:
      */
     FALRUBlk* accessBlock(Addr addr, Cycles &lat, int context_src, int *inCache = 0);
 
+    FALRUBlk* accessBlock(FALRUBlk *blk, Cycles &lat, int context_src, int *inCache = 0);
+
     /**
      * Find the block in the cache, do not update the replacement data.
      * @param addr The address to look for.

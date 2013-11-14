@@ -81,7 +81,8 @@ BaseCache::BaseCache(const Params *p)
       noTargetMSHR(NULL),
       missCount(p->max_miss_count),
       addrRanges(p->addr_ranges.begin(), p->addr_ranges.end()),
-      system(p->system)
+      system(p->system),
+      hackHitOnCold(false)
 {
 }
 
@@ -751,6 +752,10 @@ BaseCache::regStats()
         .desc("Number of misses that were no-allocate")
         ;
 
+    hiddenColdMisses
+        .name(name() + ".hidden_cold_misses")
+        .desc("Number of cold misses treated as hits.")
+        ;
 }
 
 unsigned int
@@ -769,6 +774,13 @@ BaseCache::drain(DrainManager *dm)
     setDrainState(Drainable::Drained);
     return 0;
 }
+
+void
+BaseCache::setHackHitOnCold(bool enabled)
+{
+    hackHitOnCold = enabled;
+}
+
 
 BaseCache *
 BaseCacheParams::create()

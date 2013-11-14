@@ -171,15 +171,12 @@ FALRU::invalidate(FALRU::BlkType *blk)
 }
 
 FALRUBlk*
-FALRU::accessBlock(Addr addr, Cycles &lat, int context_src, int *inCache)
+FALRU::accessBlock(FALRUBlk *blk, Cycles &lat, int context_src, int *inCache)
 {
     accesses++;
     int tmp_in_cache = 0;
-    Addr blkAddr = blkAlign(addr);
-    FALRUBlk* blk = hashLookup(blkAddr);
 
     if (blk && blk->isValid()) {
-        assert(blk->tag == blkAddr);
         tmp_in_cache = blk->inCache;
         for (unsigned i = 0; i < numCaches; i++) {
             if (1<<i & blk->inCache) {
@@ -207,6 +204,11 @@ FALRU::accessBlock(Addr addr, Cycles &lat, int context_src, int *inCache)
     return blk;
 }
 
+FALRUBlk*
+FALRU::accessBlock(Addr addr, Cycles &lat, int context_src, int *inCache)
+{
+    return accessBlock(findBlock(addr), lat, context_src, inCache);
+}
 
 FALRUBlk*
 FALRU::findBlock(Addr addr) const

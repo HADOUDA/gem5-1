@@ -47,6 +47,17 @@ from Tags import *
 class BaseCache(MemObject):
     type = 'BaseCache'
     cxx_header = "mem/cache/base.hh"
+
+    @classmethod
+    def export_method_cxx_predecls(cls, code):
+        code('#include "mem/cache/base.hh"')
+
+    @classmethod
+    def export_methods(cls, code):
+        code('''
+      void setHackHitOnCold(bool enabled);
+''')
+
     assoc = Param.Int("associativity")
     block_size = Param.Int("block size in bytes")
     hit_latency = Param.Cycles("The hit latency for this cache")
@@ -71,3 +82,4 @@ class BaseCache(MemObject):
     addr_ranges = VectorParam.AddrRange([AllMemory], "The address range for the CPU-side port")
     system = Param.System(Parent.any, "System we belong to")
     tags = Param.BaseTags(LRU(), "Tag Store for LRU caches")
+

@@ -126,17 +126,14 @@ LRU::~LRU()
 }
 
 LRU::BlkType*
-LRU::accessBlock(Addr addr, Cycles &lat, int master_id)
+LRU::accessBlock(BlkType *blk, Cycles &lat, int master_id)
 {
-    Addr tag = extractTag(addr);
-    unsigned set = extractSet(addr);
-    BlkType *blk = sets[set].findBlk(tag);
     lat = hitLatency;
     if (blk != NULL) {
         // move this block to head of the MRU list
-        sets[set].moveToHead(blk);
+        sets[blk->set].moveToHead(blk);
         DPRINTF(CacheRepl, "set %x: moving blk %x to MRU\n",
-                set, regenerateBlkAddr(tag, set));
+                blk->set, regenerateBlkAddr(blk->tag, blk->set));
         if (blk->whenReady > curTick()
             && cache->ticksToCycles(blk->whenReady - curTick()) > hitLatency) {
             lat = cache->ticksToCycles(blk->whenReady - curTick());
@@ -145,6 +142,13 @@ LRU::accessBlock(Addr addr, Cycles &lat, int master_id)
     }
 
     return blk;
+}
+
+
+LRU::BlkType*
+LRU::accessBlock(Addr addr, Cycles &lat, int master_id)
+{
+    return accessBlock(findBlock(addr), lat, master_id);
 }
 
 
