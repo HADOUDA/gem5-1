@@ -413,16 +413,14 @@ BaseCPU::takeOverFrom(BaseCPU *oldCPU)
         BaseMasterPort *new_dtb_port = newTC->getDTBPtr()->getMasterPort();
 
         // Move over any table walker ports if they exist
-        if (new_itb_port) {
-            assert(!new_itb_port->isConnected());
+        if (new_itb_port && !new_itb_port->isConnected()) {
             assert(old_itb_port);
             assert(old_itb_port->isConnected());
             BaseSlavePort &slavePort = old_itb_port->getSlavePort();
             old_itb_port->unbind();
             new_itb_port->bind(slavePort);
         }
-        if (new_dtb_port) {
-            assert(!new_dtb_port->isConnected());
+        if (new_dtb_port && !new_dtb_port->isConnected()) {
             assert(old_dtb_port);
             assert(old_dtb_port->isConnected());
             BaseSlavePort &slavePort = old_dtb_port->getSlavePort();
