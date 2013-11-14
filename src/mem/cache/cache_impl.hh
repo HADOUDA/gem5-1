@@ -298,14 +298,40 @@ Cache<TagStore>::access(PacketPtr pkt, BlkType *&blk,
     }
 
     int id = pkt->req->hasContextId() ? pkt->req->contextId() : -1;
-    blk = tags->accessBlock(pkt->getAddr(), lat, id);
+    blk = tags->findBlock(pkt->getAddr());
 
     DPRINTF(Cache, "%s%s %x %s %s\n", pkt->cmdString(),
             pkt->req->isInstFetch() ? " (ifetch)" : "",
             pkt->getAddr(), blk ? "hit" : "miss", blk ? blk->print() : "");
 
-    if (blk != NULL) {
+    if (!blk && hackHitOnCold) {
+        // Cold set detected and functional magical functional hit
+        // transformation requested.
+        BlkType *victim_blk = tags->findVictim(pkt->getAddr(), writebacks);
+        if (victim_blk->isCold && !victim_blk->isValid() &&
+            !inMissQueue(pkt->getAddr())) {
+            const bool exclusive(pkt->needsExclusive());
+            Request req_func(pkt->getAddr(),
+                             blkSize, 0, Request::funcMasterId);
+            Packet pkt_func(&req_func,
+                            exclusive ? MemCmd::ReadExReq : MemCmd::ReadReq,
+                            blkSize);
+            pkt_func.dataStatic(victim_blk->data);
+            system->getPhysMem().functionalAccess(&pkt_func);
+            assert(!pkt_func.isError());
 
+            tags->insertBlock(&pkt_func, victim_blk);
+            victim_blk->status = BlkValid | BlkReadable |
+                (exclusive ? BlkWritable : 0);
+            victim_blk->isCold = false;
+
+            blk = victim_blk;
+            ++hiddenColdMisses;
+        }
+    }
+
+    if (blk != NULL) {
+        tags->accessBlock(blk, lat, id);
         if (pkt->needsExclusive() ? blk->isWritable() : blk->isReadable()) {
             // OK to satisfy access
             incHitCount(pkt);
@@ -333,6 +359,7 @@ Cache<TagStore>::access(PacketPtr pkt, BlkType *&blk,
             }
             tags->insertBlock(pkt, blk);
             blk->status = BlkValid | BlkReadable;
+            blk->isCold = false;
         }
         std::memcpy(blk->data, pkt->getPtr<uint8_t>(), blkSize);
         blk->status |= BlkDirty;
@@ -1242,6 +1269,7 @@ Cache<TagStore>::handleFill(PacketPtr pkt, BlkType *blk,
     }
 
     blk->status |= BlkValid | BlkReadable;
+    blk->isCold = false;
 
     if (!pkt->sharedAsserted()) {
         blk->status |= BlkWritable;

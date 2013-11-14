@@ -430,6 +430,9 @@ class BaseCache : public MemObject
 
     Stats::Scalar mshr_no_allocate_misses;
 
+    /** Number of cold misses transformed into hits */
+    Stats::Scalar hiddenColdMisses;
+
     /**
      * @}
      */
@@ -582,6 +585,9 @@ class BaseCache : public MemObject
 
     }
 
+    void setHackHitOnCold(bool enabled);
+
+    bool hackHitOnCold;
 };
 
 #endif //__BASE_CACHE_HH__

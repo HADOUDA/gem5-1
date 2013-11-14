@@ -152,6 +152,8 @@ public:
      */
     BlkType* accessBlock(Addr addr, Cycles &lat, int context_src);
 
+    BlkType* accessBlock(BlkType *blk, Cycles &lat, int context_src);
+
     /**
      * Finds the given address in the cache, do not update replacement data.
      * i.e. This is a no-side-effect find of a block.
