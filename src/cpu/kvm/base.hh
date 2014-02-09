@@ -618,6 +618,17 @@ class BaseKvmCPU : public BaseCPU
      */
     bool discardPendingSignal(int signum) const;
 
+    /**
+     * Thread-specific initialization.
+     *
+     * We need to know the TID of the thread that is going to execute
+     * our event queue when we initialize signals. This method is
+     * as the first event in this SimObject's event queue.
+     *
+     * @see startup
+     */
+    void startupThread();
+
     /** Try to drain the CPU if a drain is pending */
     bool tryDrain();
 
