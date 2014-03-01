@@ -896,7 +896,7 @@ IGbE::DescCache<T>::writeback(Addr aMask)
     wbOut = max_to_wb;
 
     assert(!wbDelayEvent.scheduled()); 
-    igbe->schedule(wbDelayEvent, curTick() + igbe->wbDelay);
+    igbe->scheduleRelative(wbDelayEvent, igbe->wbDelay);
     igbe->anBegin(annSmWb, "Prepare Writeback Desc");
 }
             
@@ -906,7 +906,7 @@ IGbE::DescCache<T>::writeback1()
 {
     // If we're draining delay issuing this DMA
     if (igbe->getDrainState() != Drainable::Running) {
-        igbe->schedule(wbDelayEvent, curTick() + igbe->wbDelay);
+        igbe->scheduleRelative(wbDelayEvent, igbe->wbDelay);
         return;
     }
 
@@ -977,7 +977,7 @@ IGbE::DescCache<T>::fetchDescriptors()
     curFetching = max_to_fetch;
 
     assert(!fetchDelayEvent.scheduled());
-    igbe->schedule(fetchDelayEvent, curTick() + igbe->fetchDelay);
+    igbe->scheduleRelative(fetchDelayEvent, igbe->fetchDelay);
     igbe->anBegin(annSmFetch, "Prepare Fetch Desc");
 }
 
@@ -987,7 +987,7 @@ IGbE::DescCache<T>::fetchDescriptors1()
 {
     // If we're draining delay issuing this DMA
     if (igbe->getDrainState() != Drainable::Running) {
-        igbe->schedule(fetchDelayEvent, curTick() + igbe->fetchDelay);
+        igbe->scheduleRelative(fetchDelayEvent, igbe->fetchDelay);
         return;
     }
 
@@ -1448,14 +1448,14 @@ IGbE::RxDescCache::pktComplete()
         if (igbe->regs.rdtr.delay()) {
             Tick delay = igbe->regs.rdtr.delay() * igbe->intClock();
             DPRINTF(EthernetSM, "RXS: Scheduling DTR for %d\n", delay);
-            igbe->reschedule(igbe->rdtrEvent, curTick() + delay);
+            igbe->reschedule(igbe->rdtrEvent, igbe->curTick() + delay);
         }
 
         if (igbe->regs.radv.idv()) {
             Tick delay = igbe->regs.radv.idv() * igbe->intClock();
             DPRINTF(EthernetSM, "RXS: Scheduling ADV for %d\n", delay);
             if (!igbe->radvEvent.scheduled()) {
-                igbe->schedule(igbe->radvEvent, curTick() + delay);
+                igbe->scheduleRelative(igbe->radvEvent, delay);
             }
         }
 
@@ -1890,14 +1890,14 @@ IGbE::TxDescCache::pktComplete()
         if (igbe->regs.tidv.idv()) {
             Tick delay = igbe->regs.tidv.idv() * igbe->intClock();
             DPRINTF(EthernetDesc, "setting tidv\n");
-            igbe->reschedule(igbe->tidvEvent, curTick() + delay, true);
+            igbe->reschedule(igbe->tidvEvent, igbe->curTick() + delay, true);
         }
 
         if (igbe->regs.tadv.idv() && igbe->regs.tidv.idv()) {
             Tick delay = igbe->regs.tadv.idv() * igbe->intClock();
             DPRINTF(EthernetDesc, "setting tadv\n");
             if (!igbe->tadvEvent.scheduled()) {
-                igbe->schedule(igbe->tadvEvent, curTick() + delay);
+                igbe->scheduleRelative(igbe->tadvEvent, delay);
             }
         }
     }

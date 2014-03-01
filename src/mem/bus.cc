@@ -155,10 +155,10 @@ void BaseBus::Layer<SrcType,DstType>::occupyLayer(Tick until)
     bus.schedule(releaseEvent, until);
 
     // account for the occupied ticks
-    occupancy += until - curTick();
+    occupancy += until - bus.curTick();
 
     DPRINTF(BaseBus, "The bus is now busy from tick %d to %d\n",
-            curTick(), until);
+            bus.curTick(), until);
 }
 
 template <typename SrcType, typename DstType>

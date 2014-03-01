@@ -287,8 +287,8 @@ SimpleDRAM::decodeAddr(PacketPtr pkt, Addr dramPktAddr, unsigned size, bool isRe
     // ready time set to the current tick, the latter will be updated
     // later
     uint16_t bank_id = banksPerRank * rank + bank;
-    return new DRAMPacket(pkt, isRead, rank, bank, row, bank_id, dramPktAddr,
-                          size, banks[rank][bank]);
+    return new DRAMPacket(*this, pkt, isRead, rank, bank, row, bank_id,
+                          dramPktAddr, size, banks[rank][bank]);
 }
 
 void

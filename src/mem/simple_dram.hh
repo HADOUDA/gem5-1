@@ -236,10 +236,11 @@ class SimpleDRAM : public AbstractMemory
         BurstHelper* burstHelper;
         Bank& bankRef;
 
-        DRAMPacket(PacketPtr _pkt, bool is_read, uint8_t _rank, uint8_t _bank,
+        DRAMPacket(SimpleDRAM &parent,
+                   PacketPtr _pkt, bool is_read, uint8_t _rank, uint8_t _bank,
                    uint16_t _row, uint16_t bank_id, Addr _addr,
                    unsigned int _size, Bank& bank_ref)
-            : entryTime(curTick()), readyTime(curTick()),
+            : entryTime(parent.curTick()), readyTime(parent.curTick()),
               pkt(_pkt), isRead(is_read), rank(_rank), bank(_bank), row(_row),
               bankId(bank_id), addr(_addr), size(_size), burstHelper(NULL),
               bankRef(bank_ref)

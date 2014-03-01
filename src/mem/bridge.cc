@@ -265,7 +265,7 @@ Bridge::BridgeMasterPort::trySendTiming()
 
     DeferredPacket req = transmitList.front();
 
-    assert(req.tick <= curTick());
+    assert(req.tick <= bridge.curTick());
 
     PacketPtr pkt = req.pkt;
 
@@ -303,7 +303,7 @@ Bridge::BridgeSlavePort::trySendTiming()
 
     DeferredPacket resp = transmitList.front();
 
-    assert(resp.tick <= curTick());
+    assert(resp.tick <= bridge.curTick());
 
     PacketPtr pkt = resp.pkt;
 

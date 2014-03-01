@@ -522,8 +522,7 @@ BaseKvmCPU::tick()
 
       case RunningServiceCompletion:
       case Running: {
-          EventQueue *q = curEventQueue();
-          Tick ticksToExecute(q->nextTick() - curTick());
+          Tick ticksToExecute(eventq->nextTick() - curTick());
 
           // We might need to update the KVM state.
           syncKvmState();

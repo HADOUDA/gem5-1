@@ -108,7 +108,7 @@ BaseCache::CacheSlavePort::clearBlocked()
         DPRINTF(CachePort, "Cache port %s sending retry\n", name());
         mustSendRetry = false;
         // @TODO: need to find a better time (next bus cycle?)
-        owner.schedule(sendRetryEvent, curTick() + 1);
+        owner.schedule(sendRetryEvent, owner.curTick() + 1);
     }
 }
 

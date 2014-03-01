@@ -169,7 +169,7 @@ RubyPort::PioMasterPort::recvTimingResp(PacketPtr pkt)
 
     // send next cycle
     ruby_port->pioSlavePort.schedTimingResp(
-            pkt, curTick() + g_system_ptr->clockPeriod());
+            pkt, owner.curTick() + g_system_ptr->clockPeriod());
     return true;
 }
 
@@ -191,7 +191,7 @@ bool RubyPort::MemMasterPort::recvTimingResp(PacketPtr pkt)
     delete senderState;
 
     // attempt to send the response in the next cycle
-    port->schedTimingResp(pkt, curTick() + g_system_ptr->clockPeriod());
+    port->schedTimingResp(pkt, owner.curTick() + g_system_ptr->clockPeriod());
 
     return true;
 }
@@ -236,7 +236,7 @@ RubyPort::MemSlavePort::recvTimingReq(PacketPtr pkt)
 
         // send next cycle
         ruby_port->memMasterPort.schedTimingReq(pkt,
-            curTick() + g_system_ptr->clockPeriod());
+            owner.curTick() + g_system_ptr->clockPeriod());
         return true;
     }
 
@@ -503,7 +503,7 @@ RubyPort::MemSlavePort::hitCallback(PacketPtr pkt)
     if (needsResponse) {
         DPRINTF(RubyPort, "Sending packet back over port\n");
         // send next cycle
-        schedTimingResp(pkt, curTick() + g_system_ptr->clockPeriod());
+        schedTimingResp(pkt, owner.curTick() + g_system_ptr->clockPeriod());
     } else {
         delete pkt;
     }

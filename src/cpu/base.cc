@@ -527,7 +527,7 @@ BaseCPU::ProfileEvent::process()
         tc->profileSample();
     }
 
-    cpu->schedule(this, curTick() + interval);
+    cpu->scheduleRelative(this, interval);
 }
 
 void

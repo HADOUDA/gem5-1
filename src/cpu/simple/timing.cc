@@ -733,7 +733,7 @@ TimingSimpleCPU::IcachePort::recvTimingResp(PacketPtr pkt)
     // delay processing of returned data until next CPU clock edge
     Tick next_tick = cpu->clockEdge();
 
-    if (next_tick == curTick())
+    if (next_tick == cpu->curTick())
         cpu->completeIfetch(pkt);
     else
         tickEvent.schedule(pkt, next_tick);
@@ -833,7 +833,7 @@ TimingSimpleCPU::DcachePort::recvTimingResp(PacketPtr pkt)
     // delay processing of returned data until next CPU clock edge
     Tick next_tick = cpu->clockEdge();
 
-    if (next_tick == curTick()) {
+    if (next_tick == cpu->curTick()) {
         cpu->completeDataAccess(pkt);
     } else {
         if (!tickEvent.scheduled()) {

@@ -89,19 +89,19 @@ inline const std::string &name() { return Trace::DefaultName; }
 #define DDUMP(x, data, count) do {                              \
     using namespace Debug;                                      \
     if (DTRACE(x))                                              \
-        Trace::dump(curTick(), name(), data, count);              \
+        Trace::dump(::curTick(), name(), data, count);              \
 } while (0)
 
 #define DPRINTF(x, ...) do {                                    \
     using namespace Debug;                                      \
     if (DTRACE(x))                                              \
-        Trace::dprintf(curTick(), name(), __VA_ARGS__);           \
+        Trace::dprintf(::curTick(), name(), __VA_ARGS__);           \
 } while (0)
 
 #define DPRINTFS(x, s, ...) do {                                \
     using namespace Debug;                                      \
     if (DTRACE(x))                                              \
-        Trace::dprintf(curTick(), s->name(), __VA_ARGS__);      \
+        Trace::dprintf(::curTick(), s->name(), __VA_ARGS__);      \
 } while (0)
 
 #define DPRINTFR(x, ...) do {                                   \
@@ -111,11 +111,11 @@ inline const std::string &name() { return Trace::DefaultName; }
 } while (0)
 
 #define DDUMPN(data, count) do {                                \
-    Trace::dump(curTick(), name(), data, count);                  \
+    Trace::dump(::curTick(), name(), data, count);                  \
 } while (0)
 
 #define DPRINTFN(...) do {                                      \
-    Trace::dprintf(curTick(), name(), __VA_ARGS__);               \
+    Trace::dprintf(::curTick(), name(), __VA_ARGS__);               \
 } while (0)
 
 #define DPRINTFNR(...) do {                                     \

@@ -158,7 +158,7 @@ EtherLink::Link::txDone()
     if (linkDelay > 0) {
         DPRINTF(Ethernet, "packet delayed: delay=%d\n", linkDelay);
         Event *event = new LinkDelayEvent(this, packet);
-        parent->schedule(event, curTick() + linkDelay);
+        parent->scheduleRelative(event, linkDelay);
     } else {
         txComplete(packet);
     }
@@ -187,7 +187,7 @@ EtherLink::Link::transmit(EthPacketPtr pkt)
 
     DPRINTF(Ethernet, "scheduling packet: delay=%d, (rate=%f)\n",
             delay, ticksPerByte);
-    parent->schedule(doneEvent, curTick() + delay);
+    parent->scheduleRelative(doneEvent, delay);
 
     return true;
 }

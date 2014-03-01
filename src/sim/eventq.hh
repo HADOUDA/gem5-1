@@ -227,7 +227,7 @@ class Event : public EventBase, public Serializable
         queue = q;
 #endif
 #ifdef EVENTQ_DEBUG
-        whenScheduled = curTick();
+        whenScheduled = ::curTick();
 #endif
     }
 
@@ -292,7 +292,7 @@ class Event : public EventBase, public Serializable
         queue = NULL;
 #endif
 #ifdef EVENTQ_DEBUG
-        whenCreated = curTick();
+        whenCreated = ::curTick();
         whenScheduled = 0;
 #endif
     }
@@ -446,7 +446,7 @@ class EventQueue : public Serializable
 
     Tick nextTick() const { return head->when(); }
     void setCurTick(Tick newVal) { _curTick = newVal; }
-    Tick getCurTick() { return _curTick; }
+    Tick getCurTick() const { return _curTick; }
 
     Event *serviceOne();
 
@@ -524,6 +524,12 @@ class EventManager
     }
 
     void
+    scheduleRelative(Event &event, Tick delay)
+    {
+        eventq->schedule(&event, curTick() + delay);
+    }
+
+    void
     deschedule(Event &event)
     {
         eventq->deschedule(&event);
@@ -542,6 +548,12 @@ class EventManager
     }
 
     void
+    scheduleRelative(Event *event, Tick delay)
+    {
+        eventq->schedule(event, curTick() + delay);
+    }
+
+    void
     deschedule(Event *event)
     {
         eventq->deschedule(event);
@@ -554,6 +566,8 @@ class EventManager
     }
 
     void setCurTick(Tick newVal) { eventq->setCurTick(newVal); }
+
+    Tick curTick() const { return eventq->getCurTick(); }
 };
 
 template <class T, void (T::* F)()>
