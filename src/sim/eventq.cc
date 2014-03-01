@@ -203,6 +203,7 @@ EventQueue::remove(Event *event)
 Event *
 EventQueue::serviceOne()
 {
+    std::lock_guard<std::recursive_mutex> lock(service_mutex);
     Event *event = head;
     Event *next = head->nextInBin;
     event->flags.clear(Event::Scheduled);
@@ -475,7 +476,6 @@ EventQueue::asyncInsert(Event *event)
 void
 EventQueue::handleAsyncInsertions()
 {
-    assert(this == curEventQueue());
     async_queue_mutex->lock();
 
     while (!async_queue.empty()) {

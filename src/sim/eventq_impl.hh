@@ -69,7 +69,6 @@ EventQueue::deschedule(Event *event)
 {
     assert(event->scheduled());
     assert(event->initialized());
-    assert(!inParallelMode || this == curEventQueue());
 
     remove(event);
 
@@ -89,7 +88,6 @@ EventQueue::reschedule(Event *event, Tick when, bool always)
     assert(when >= getCurTick());
     assert(always || event->scheduled());
     assert(event->initialized());
-    assert(!inParallelMode || this == curEventQueue());
 
     if (event->scheduled())
         remove(event);

@@ -414,6 +414,8 @@ class EventQueue : public Serializable
     //! List of events added by other threads to this event queue.
     std::list<Event*> async_queue;
 
+    std::recursive_mutex service_mutex;
+
     //! Insert / remove event from the queue. Should only be called
     //! by thread operating this queue.
     void insert(Event *event);
@@ -490,6 +492,43 @@ class EventQueue : public Serializable
      *  NOT RECOMMENDED FOR USE.
      */
     Event* replaceHead(Event* s);
+
+    void setThread(pthread_t thread);
+    void kick();
+
+    /**@{*/
+    /**
+     * Lock an event queue to prevent events from being serviced.
+     *
+     * If SimObjects need to be called across event queues (e.g.,
+     * device accesses), the queue running the device needs to be
+     * locked to prevent races between events serviced in the event
+     * queue and the events scheduled by the call. This can be useful
+     * to enable device accesses when timing is not crucial (e.g.,
+     * when fast forwarding using KVM).
+     *
+     * @warn Scheduling events across event queues can result in
+     * non-deterministic simulation results.
+     */
+    void lock() {
+        service_mutex.lock();
+    }
+    /**
+     * Unlock a locked event queue.
+     *
+     * @see lock()
+     */
+    void unlock() {
+        // SimObjects might have inserted new events into the queue
+        // while it was locked. If this was done from a different
+        // thread than the thread owning the queue, they will be
+        // inserted as asynchronous events. We need to schedule them
+        // like normal events since they should be allowed to execute
+        // before the global barrier.
+        handleAsyncInsertions();
+        service_mutex.unlock();
+    }
+    /**@}*/
 
 #ifndef SWIG
     virtual void serialize(std::ostream &os);
