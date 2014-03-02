@@ -91,8 +91,12 @@ simulate(Tick num_cycles)
         // the main thread (the one we're currently running on)
         // handles queue 0, so we only need to allocate new threads
         // for queues 1..N-1.  We'll call these the "subordinate" threads.
+        mainEventQueue[0]->setThread(pthread_self());
         for (uint32_t i = 1; i < numMainEventQueues; i++) {
-            threads.push_back(new std::thread(thread_loop, mainEventQueue[i]));
+            std::thread *thread(
+                new std::thread(thread_loop, mainEventQueue[i]));
+            mainEventQueue[i]->setThread(thread->native_handle());
+            threads.push_back(thread);
         }
 
         threads_initialized = true;
@@ -191,6 +195,9 @@ doSimLoop(EventQueue *eventq)
         assert(!eventq->empty());
         assert(curTick() <= eventq->nextTick() &&
                "event scheduled in the past");
+
+        if (eventq->pendingOpportunisticEvents())
+            eventq->handleOpportunisticInsertions();
 
         Event *exit_event = eventq->serviceOne();
         if (exit_event != NULL) {

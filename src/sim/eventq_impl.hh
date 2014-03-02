@@ -39,13 +39,17 @@
 #include "sim/eventq.hh"
 
 inline void
-EventQueue::schedule(Event *event, Tick when, bool global)
+EventQueue::schedule(Event *event, Tick when, bool global, bool opportunistic)
 {
-    assert(when >= getCurTick());
+    assert(when >= getCurTick() || opportunistic);
     assert(!event->scheduled());
     assert(event->initialized());
 
-    event->setWhen(when, this);
+    if (opportunistic) {
+        event->setWhen(0, this);
+    } else {
+        event->setWhen(when, this);
+    }
 
     // The check below is to make sure of two things
     // a. a thread schedules local events on other queues through the asyncq
@@ -53,7 +57,9 @@ EventQueue::schedule(Event *event, Tick when, bool global)
     //    this event belongs to this eventq. This is required to maintain
     //    a total order amongst the global events. See global_event.{cc,hh}
     //    for more explanation.
-    if (inParallelMode && (this != curEventQueue() || global)) {
+    if (opportunistic) {
+        opportunisticInsert(event);
+    } else if (inParallelMode && (this != curEventQueue() || global)) {
         asyncInsert(event);
     } else {
         insert(event);

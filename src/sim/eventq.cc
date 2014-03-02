@@ -33,6 +33,7 @@
  */
 
 #include <cassert>
+#include <csignal>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -484,4 +485,42 @@ EventQueue::handleAsyncInsertions()
     }
 
     async_queue_mutex->unlock();
+}
+
+void
+EventQueue::opportunisticInsert(Event *event)
+{
+    std::lock_guard<std::mutex> lock(opportunistic_mutex);
+    opportunistic_queue.push_back(event);
+    opportunistic_pending = true;
+    kick();
+}
+
+void
+EventQueue::handleOpportunisticInsertions()
+{
+    std::lock_guard<std::mutex> lock(opportunistic_mutex);
+    opportunistic_pending = false;
+
+    while (!opportunistic_queue.empty()) {
+        Event *e(opportunistic_queue.front());
+        opportunistic_queue.pop_front();
+
+        assert(e->when() == 0);
+        e->setWhen(curTick(), this);
+        insert(e);
+    }
+}
+
+void
+EventQueue::setThread(pthread_t _thread)
+{
+    thread = _thread;
+}
+
+void
+EventQueue::kick()
+{
+    if (inParallelMode)
+        pthread_kill(thread, SIGRTMIN);
 }

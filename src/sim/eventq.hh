@@ -39,10 +39,12 @@
 #define __SIM_EVENTQ_HH__
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <climits>
 #include <iosfwd>
 #include <mutex>
+#include <pthread.h>
 #include <string>
 
 #include "base/flags.hh"
@@ -408,6 +410,8 @@ class EventQueue : public Serializable
     Event *head;
     Tick _curTick;
 
+    pthread_t thread;
+
     //! Mutex to protect async queue.
     std::mutex *async_queue_mutex;
 
@@ -415,6 +419,15 @@ class EventQueue : public Serializable
     std::list<Event*> async_queue;
 
     std::recursive_mutex service_mutex;
+
+    /** { */
+    //! The list of opportunistic events has been updated
+    std::atomic_bool opportunistic_pending;
+    std::mutex opportunistic_mutex;
+    std::list<Event*> opportunistic_queue;
+
+    void opportunisticInsert(Event *event);
+    /** @} */
 
     //! Insert / remove event from the queue. Should only be called
     //! by thread operating this queue.
@@ -436,7 +449,8 @@ class EventQueue : public Serializable
 
     //! Schedule the given event on this queue. Safe to call from any
     //! thread.
-    void schedule(Event *event, Tick when, bool global = false);
+    void schedule(Event *event, Tick when,
+                  bool global = false, bool opportunistic = false);
 
     //! Deschedule the specified event. Should be called only from the
     //! owning thread.
@@ -482,6 +496,11 @@ class EventQueue : public Serializable
 
     //! Function for moving events from the async_queue to the main queue.
     void handleAsyncInsertions();
+
+    /** @{ */
+    bool pendingOpportunisticEvents() const { return opportunistic_pending; }
+    void handleOpportunisticInsertions();
+    /** @} */
 
     /**
      *  function for replacing the head of the event queue, so that a
@@ -569,6 +588,12 @@ class EventManager
     }
 
     void
+    scheduleOpportunistic(Event &event)
+    {
+        eventq->schedule(&event, 0, false, true);
+    }
+
+    void
     deschedule(Event &event)
     {
         eventq->deschedule(&event);
@@ -590,6 +615,12 @@ class EventManager
     scheduleRelative(Event *event, Tick delay)
     {
         eventq->schedule(event, curTick() + delay);
+    }
+
+    void
+    scheduleOpportunistic(Event *event)
+    {
+        eventq->schedule(event, 0, false, true);
     }
 
     void
