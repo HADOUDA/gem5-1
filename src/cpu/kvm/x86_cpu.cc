@@ -729,6 +729,25 @@ setKvmSegmentReg(ThreadContext *tc, struct kvm_segment &kvm_seg,
 }
 
 static inline void
+setKvmSegmentReg8086(ThreadContext *tc, struct kvm_segment &kvm_seg,
+                     const int index)
+{
+    kvm_seg.base = tc->readMiscRegNoEffect(MISCREG_SEG_BASE(index));
+    kvm_seg.limit = tc->readMiscRegNoEffect(MISCREG_SEG_LIMIT(index));
+    kvm_seg.selector = tc->readMiscRegNoEffect(MISCREG_SEG_SEL(index));
+
+    kvm_seg.type = 3;
+    kvm_seg.present = 1;
+    kvm_seg.dpl = 3;
+    kvm_seg.db = 0;
+    kvm_seg.s = 1;
+    kvm_seg.l = 0;
+    kvm_seg.g = 0;
+    kvm_seg.avl = 0;
+    kvm_seg.unusable = 0;
+}
+
+static inline void
 setKvmDTableReg(ThreadContext *tc, struct kvm_dtable &kvm_dtable,
                 const int index)
 {
@@ -754,16 +773,25 @@ X86KvmCPU::updateKvmStateSRegs()
     struct kvm_sregs sregs;
 
 #define APPLY_SREG(kreg, mreg) sregs.kreg = tc->readMiscRegNoEffect(mreg)
-#define APPLY_SEGMENT(kreg, idx) setKvmSegmentReg(tc, sregs.kreg, idx)
 #define APPLY_DTABLE(kreg, idx) setKvmDTableReg(tc, sregs.kreg, idx)
 
     FOREACH_SREG();
-    FOREACH_SEGMENT();
     FOREACH_DTABLE();
 
 #undef APPLY_SREG
-#undef APPLY_SEGMENT
 #undef APPLY_DTABLE
+
+    RFLAGS rflags_nocc(tc->readMiscReg(MISCREG_RFLAGS));
+    if (rflags_nocc.vm) {
+        // In virtual 8086 mode
+#define APPLY_SEGMENT(kreg, idx) setKvmSegmentReg8086(tc, sregs.kreg, idx)
+    FOREACH_SEGMENT();
+#undef APPLY_SEGMENT
+    } else {
+#define APPLY_SEGMENT(kreg, idx) setKvmSegmentReg(tc, sregs.kreg, idx)
+    FOREACH_SEGMENT();
+#undef APPLY_SEGMENT
+    }
 
     // Clear the interrupt bitmap
     memset(&sregs.interrupt_bitmap, 0, sizeof(sregs.interrupt_bitmap));
@@ -800,7 +828,6 @@ X86KvmCPU::updateKvmStateSRegs()
 
     // Do checks after fixing up the state to avoid getting excessive
     // amounts of warnings.
-    RFLAGS rflags_nocc(tc->readMiscReg(MISCREG_RFLAGS));
     if (!rflags_nocc.vm) {
         // Do segment verification if the CPU isn't entering virtual
         // 8086 mode.  We currently assume that unrestricted guest
