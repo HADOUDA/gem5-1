@@ -232,8 +232,7 @@ namespace X86ISA
                 0x00000000ffff0000ULL);
         tc->setMiscReg(MISCREG_CS_EFF_BASE,
                 0x00000000ffff0000ULL);
-        // This has the base value pre-added.
-        tc->setMiscReg(MISCREG_CS_LIMIT, 0xffffffff);
+        tc->setMiscReg(MISCREG_CS_LIMIT, 0xffff);
         tc->setMiscReg(MISCREG_CS_ATTR, codeAttr);
 
         PCState pc(0x000000000000fff0ULL + tc->readMiscReg(MISCREG_CS_BASE));
