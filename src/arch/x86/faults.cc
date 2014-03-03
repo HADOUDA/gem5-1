@@ -245,15 +245,22 @@ namespace X86ISA
         tc->setMiscReg(MISCREG_IDTR_BASE, 0);
         tc->setMiscReg(MISCREG_IDTR_LIMIT, 0xffff);
 
+
+        SegAttr tslAttr = 0;
+        tslAttr.present = 1;
+        tslAttr.type = 2;
         tc->setMiscReg(MISCREG_TSL, 0);
         tc->setMiscReg(MISCREG_TSL_BASE, 0);
         tc->setMiscReg(MISCREG_TSL_LIMIT, 0xffff);
-        tc->setMiscReg(MISCREG_TSL_ATTR, 0);
+        tc->setMiscReg(MISCREG_TSL_ATTR, tslAttr);
 
+        SegAttr trAttr = 0;
+        trAttr.present = 1;
+        trAttr.type = 3;
         tc->setMiscReg(MISCREG_TR, 0);
         tc->setMiscReg(MISCREG_TR_BASE, 0);
         tc->setMiscReg(MISCREG_TR_LIMIT, 0xffff);
-        tc->setMiscReg(MISCREG_TR_ATTR, 0);
+        tc->setMiscReg(MISCREG_TR_ATTR, trAttr);
 
         // This value should be the family/model/stepping of the processor.
         // (page 418). It should be consistent with the value from CPUID, but
