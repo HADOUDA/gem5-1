@@ -183,6 +183,31 @@ class Interrupts : public BasicPioDevice, IntDevice
         return bits(regs[base + (vector / 32)], vector % 5);
     }
 
+    class DelayedInterruptEvent
+        : public Event
+    {
+      public:
+        DelayedInterruptEvent(Interrupts *interrupts,
+                              uint8_t vector,
+                              uint8_t deliveryMode,
+                              bool level)
+            : _interrupts(interrupts),
+              _vector(vector), _deliveryMode(deliveryMode), _level(level) {
+
+            setFlags(AutoDelete);
+        }
+
+        void process() {
+            _interrupts->requestInterrupt(_vector, _deliveryMode, _level);
+        }
+
+      private:
+        Interrupts *_interrupts;
+        uint8_t _vector;
+        uint8_t _deliveryMode;
+        bool _level;
+    };
+
     void requestInterrupt(uint8_t vector, uint8_t deliveryMode, bool level);
 
     BaseCPU *cpu;

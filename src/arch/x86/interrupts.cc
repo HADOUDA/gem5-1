@@ -338,8 +338,19 @@ X86ISA::Interrupts::recvMessage(PacketPtr pkt)
                     "Got Trigger Interrupt message with vector %#x.\n",
                     message.vector);
 
-            requestInterrupt(message.vector,
-                    message.deliveryMode, message.trigger);
+            // Is this an inter-domain interrupt? In that case, we might need
+            // to delay it.
+            if (eventq != curEventQueue()) {
+                scheduleOpportunistic(
+                    new DelayedInterruptEvent(this,
+                                              message.vector,
+                                              message.deliveryMode,
+                                              message.trigger));
+            } else {
+                requestInterrupt(message.vector,
+                                 message.deliveryMode,
+                                 message.trigger);
+            }
         }
         break;
       default:
