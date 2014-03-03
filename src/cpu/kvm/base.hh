@@ -136,6 +136,14 @@ class BaseKvmCPU : public BaseCPU
 
     KvmVM &vm;
 
+  private:
+    void activateContext() { activateContext(Cycles(0)); }
+    void activateContext(Cycles delay);
+    void suspendContext();
+    void deallocateContext();
+    void haltContext();
+
+
   protected:
     /**
      *

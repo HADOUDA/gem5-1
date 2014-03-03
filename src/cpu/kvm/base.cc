@@ -416,10 +416,18 @@ BaseKvmCPU::wakeup()
 {
     DPRINTF(Kvm, "wakeup()\n");
 
-    if (thread->status() != ThreadContext::Suspended)
-        return;
+    // Is this the result of an inter-domain event? In that case, try
+    // to wake the CPU as soon as possible.
+    if (eventq != curEventQueue()) {
+        scheduleOpportunistic(
+            new EventWrapper<BaseKvmCPU,
+                             &BaseKvmCPU::wakeup>(this, true));
+    } else {
+        if (thread->status() != ThreadContext::Suspended)
+            return;
 
-    thread->activate();
+        thread->activate();
+    }
 }
 
 void
@@ -430,9 +438,27 @@ BaseKvmCPU::activateContext(ThreadID thread_num, Cycles delay)
     assert(thread_num == 0);
     assert(thread);
 
-    assert(_status == Idle);
-    assert(!tickEvent.scheduled());
+    if (eventq != curEventQueue()) {
+        scheduleOpportunistic(
+            new EventWrapper<BaseKvmCPU,
+                             &BaseKvmCPU::activateContext>(this, true));
+    } else {
+        assert(_status == Idle);
+        activateContext(delay);
+    }
+}
 
+void
+BaseKvmCPU::activateContext(Cycles delay)
+{
+    assert(eventq == curEventQueue());
+
+    // This can happen if the activate context call was made from
+    // another thread.
+    if (_status == Running)
+        return;
+
+    assert(!tickEvent.scheduled());
     numCycles += ticksToCycles(thread->lastActivate - thread->lastSuspend);
 
     schedule(tickEvent, clockEdge(delay));
@@ -447,6 +473,20 @@ BaseKvmCPU::suspendContext(ThreadID thread_num)
 
     assert(thread_num == 0);
     assert(thread);
+
+    if (eventq != curEventQueue()) {
+        scheduleOpportunistic(
+            new EventWrapper<BaseKvmCPU,
+                             &BaseKvmCPU::suspendContext>(this, true));
+    } else {
+        suspendContext();
+    }
+}
+
+void
+BaseKvmCPU::suspendContext()
+{
+    assert(eventq == curEventQueue());
 
     if (_status == Idle)
         return;
@@ -466,15 +506,52 @@ BaseKvmCPU::suspendContext(ThreadID thread_num)
 void
 BaseKvmCPU::deallocateContext(ThreadID thread_num)
 {
-    // for now, these are equivalent
-    suspendContext(thread_num);
+    DPRINTF(Kvm, "deallocateContext %d\n", thread_num);
+
+    assert(thread_num == 0);
+    assert(thread);
+
+    if (eventq != curEventQueue()) {
+        scheduleOpportunistic(
+            new EventWrapper<BaseKvmCPU,
+                             &BaseKvmCPU::deallocateContext>(this, true));
+    } else {
+        deallocateContext();
+    }
 }
+
+void
+BaseKvmCPU::deallocateContext()
+{
+    assert(eventq == curEventQueue());
+    // for now, these are equivalent
+    suspendContext();
+}
+
 
 void
 BaseKvmCPU::haltContext(ThreadID thread_num)
 {
+    DPRINTF(Kvm, "haltContext %d\n", thread_num);
+
+    assert(thread_num == 0);
+    assert(thread);
+
+    if (eventq != curEventQueue()) {
+        scheduleOpportunistic(
+            new EventWrapper<BaseKvmCPU,
+                             &BaseKvmCPU::haltContext>(this, true));
+    } else {
+        haltContext();
+    }
+}
+
+void
+BaseKvmCPU::haltContext()
+{
+    assert(eventq == curEventQueue());
     // for now, these are equivalent
-    suspendContext(thread_num);
+    suspendContext();
 }
 
 ThreadContext *
