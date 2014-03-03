@@ -334,6 +334,9 @@ class KvmVM : public SimObject
     /** Global KVM interface */
     Kvm kvm;
 
+    void lock() const { eventq->lock(); }
+    void unlock() const { eventq->unlock(); }
+
   protected:
     /**
      * VM CPU initialization code.

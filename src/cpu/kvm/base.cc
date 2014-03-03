@@ -1055,6 +1055,8 @@ BaseKvmCPU::handleKvmExitFailEntry()
 Tick
 BaseKvmCPU::doMMIOAccess(Addr paddr, void *data, int size, bool write)
 {
+    std::lock_guard<KvmVM> lock(vm);
+
     ThreadContext *tc(thread->getTC());
     syncThreadContext();
 

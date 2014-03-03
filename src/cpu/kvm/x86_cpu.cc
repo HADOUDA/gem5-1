@@ -1325,6 +1325,8 @@ X86KvmCPU::handleIOMiscReg32(int miscreg)
 Tick
 X86KvmCPU::handleKvmExitIO()
 {
+    std::lock_guard<KvmVM> lock(vm);
+
     struct kvm_run &kvm_run(*getKvmRunState());
     bool isWrite(kvm_run.io.direction == KVM_EXIT_IO_OUT);
     unsigned char *guestData(getGuestData(kvm_run.io.data_offset));
