@@ -91,6 +91,11 @@ class BaseGlobalEvent : public EventBase
 
         bool globalBarrier()
         {
+            // The event queue will be locked upon entering this
+            // method. We need to unlock it to prevent deadlocks when
+            // if this thread is waiting on the barrier and another
+            // thread wants to lock the event queue.
+            EventQueue::ScopedRelease release(curEventQueue());
             return _globalEvent->barrier->wait();
         }
 
