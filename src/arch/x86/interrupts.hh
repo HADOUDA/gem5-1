@@ -215,7 +215,10 @@ class Interrupts : public BasicPioDevice, IntDevice
     void init();
 
     /*
-     * Functions to interact with the interrupt port from IntDevice.
+     * Functions to interact with the interrupt port from
+     * IntDevice. These methods are all safe to call across event
+     * queues since they will force a temporary migration into the
+     * interrupt controller's event queue.
      */
     Tick read(PacketPtr pkt);
     Tick write(PacketPtr pkt);
