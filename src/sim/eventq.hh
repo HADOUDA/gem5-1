@@ -414,6 +414,8 @@ class EventQueue : public Serializable
     //! List of events added by other threads to this event queue.
     std::list<Event*> async_queue;
 
+    std::mutex service_mutex;
+
     //! Insert / remove event from the queue. Should only be called
     //! by thread operating this queue.
     void insert(Event *event);
@@ -427,6 +429,68 @@ class EventQueue : public Serializable
     EventQueue(const EventQueue &);
 
   public:
+#ifndef SWIG
+    /**
+     * Temporarily migrate execution to a different event queue.
+     *
+     * An instance of this class temporarily migrates execution to a
+     * different event queue by releasing the current queue, locking
+     * the new queue, and updating curEventQueue(). This is can, for
+     * example, be useful when performing IO across thread event
+     * queues when timing is not crucial (e.g., during fast
+     * forwarding).
+     */
+    class ScopedMigration
+    {
+      public:
+        ScopedMigration(EventQueue *_new_eq)
+            :  new_eq(*_new_eq), old_eq(*curEventQueue())
+        {
+            old_eq.unlock();
+            new_eq.lock();
+            curEventQueue(&new_eq);
+        }
+
+        ~ScopedMigration()
+        {
+            new_eq.unlock();
+            old_eq.lock();
+            curEventQueue(&old_eq);
+        }
+
+      private:
+        EventQueue &new_eq;
+        EventQueue &old_eq;
+    };
+
+    /**
+     * Temporarily release the event queue service lock.
+     *
+     * There are cases where it is desirable to temporarily release
+     * the event queue lock to prevent deadlocks. For example, when
+     * waiting on the global barrier, we need to release the lock to
+     * prevent deadlocks from happening when another thread tries to
+     * temporarily take over the event queue waiting on the barrier.
+     */
+    class ScopedRelease
+    {
+      public:
+        ScopedRelease(EventQueue *_eq)
+            :  eq(*_eq)
+        {
+            eq.unlock();
+        }
+
+        ~ScopedRelease()
+        {
+            eq.lock();
+        }
+
+      private:
+        EventQueue &eq;
+    };
+#endif
+
     EventQueue(const std::string &n);
 
     virtual const std::string name() const { return objName; }
@@ -490,6 +554,9 @@ class EventQueue : public Serializable
      *  NOT RECOMMENDED FOR USE.
      */
     Event* replaceHead(Event* s);
+
+    void lock() { service_mutex.lock(); }
+    void unlock() { service_mutex.unlock(); }
 
 #ifndef SWIG
     virtual void serialize(std::ostream &os);

@@ -198,6 +198,7 @@ doSimLoop(EventQueue *eventq)
         }
 
         if (async_event && testAndClearAsyncEvent()) {
+            std::lock_guard<EventQueue> lock(*eventq);
             async_event = false;
             if (async_statdump || async_statreset) {
                 Stats::schedStatEvent(async_statdump, async_statreset);
