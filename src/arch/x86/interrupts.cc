@@ -211,6 +211,8 @@ decodeAddr(Addr paddr)
 Tick
 X86ISA::Interrupts::read(PacketPtr pkt)
 {
+    EventQueue::ScopedMigration migrate(eventQueue());
+
     Addr offset = pkt->getAddr() - pioAddr;
     //Make sure we're at least only accessing one register.
     if ((offset & ~mask(3)) != ((offset + pkt->getSize()) & ~mask(3)))
@@ -228,6 +230,8 @@ X86ISA::Interrupts::read(PacketPtr pkt)
 Tick
 X86ISA::Interrupts::write(PacketPtr pkt)
 {
+    EventQueue::ScopedMigration migrate(eventQueue());
+
     Addr offset = pkt->getAddr() - pioAddr;
     //Make sure we're at least only accessing one register.
     if ((offset & ~mask(3)) != ((offset + pkt->getSize()) & ~mask(3)))
@@ -327,6 +331,8 @@ X86ISA::Interrupts::init()
 Tick
 X86ISA::Interrupts::recvMessage(PacketPtr pkt)
 {
+    EventQueue::ScopedMigration migrate(eventQueue());
+
     Addr offset = pkt->getAddr() - x86InterruptAddress(initialApicId, 0);
     assert(pkt->cmd == MemCmd::MessageReq);
     switch(offset)
@@ -355,6 +361,8 @@ X86ISA::Interrupts::recvMessage(PacketPtr pkt)
 Tick
 X86ISA::Interrupts::recvResponse(PacketPtr pkt)
 {
+    EventQueue::ScopedMigration migrate(eventQueue());
+
     assert(!pkt->isError());
     assert(pkt->cmd == MemCmd::MessageResp);
     if (--pendingIPIs == 0) {
