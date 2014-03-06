@@ -414,7 +414,7 @@ class EventQueue : public Serializable
     //! List of events added by other threads to this event queue.
     std::list<Event*> async_queue;
 
-    std::recursive_mutex service_mutex;
+    std::mutex service_mutex;
 
     //! Insert / remove event from the queue. Should only be called
     //! by thread operating this queue.
@@ -446,15 +446,15 @@ class EventQueue : public Serializable
         ScopedMigration(EventQueue *_new_eq)
             :  new_eq(*_new_eq), old_eq(*curEventQueue())
         {
-            old_eq.service_mutex.unlock();
-            new_eq.service_mutex.lock();
+            old_eq.unlock();
+            new_eq.lock();
             curEventQueue(&new_eq);
         }
 
         ~ScopedMigration()
         {
-            new_eq.service_mutex.unlock();
-            old_eq.service_mutex.lock();
+            new_eq.unlock();
+            old_eq.lock();
             curEventQueue(&old_eq);
         }
 
@@ -478,12 +478,12 @@ class EventQueue : public Serializable
         ScopedRelease(EventQueue *_eq)
             :  eq(*_eq)
         {
-            eq.service_mutex.unlock();
+            eq.unlock();
         }
 
         ~ScopedRelease()
         {
-            eq.service_mutex.lock();
+            eq.lock();
         }
 
       private:
@@ -554,6 +554,9 @@ class EventQueue : public Serializable
      *  NOT RECOMMENDED FOR USE.
      */
     Event* replaceHead(Event* s);
+
+    void lock() { service_mutex.lock(); }
+    void unlock() { service_mutex.unlock(); }
 
 #ifndef SWIG
     virtual void serialize(std::ostream &os);

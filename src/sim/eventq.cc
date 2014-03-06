@@ -203,7 +203,7 @@ EventQueue::remove(Event *event)
 Event *
 EventQueue::serviceOne()
 {
-    std::lock_guard<std::recursive_mutex> lock(service_mutex);
+    std::lock_guard<EventQueue> lock(*this);
     Event *event = head;
     Event *next = head->nextInBin;
     event->flags.clear(Event::Scheduled);
